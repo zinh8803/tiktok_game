@@ -1,0 +1,1072 @@
+<template>
+  <div class="dashboard-page">
+    <!-- Top Navigation Bar -->
+    <header class="dash-topbar">
+      <div class="topbar-brand">
+        <div class="brand-badge">KB</div>
+        <div>
+          <h1>Knowledge Battle — Bàn Điều Khiển Streamer</h1>
+          <p>Quản lý phiên TikTok LIVE, điều phối trận đấu và cấu hình OBS Browser Source</p>
+        </div>
+      </div>
+
+      <nav class="topbar-actions">
+        <router-link to="/admin" class="btn btn-secondary">
+          <Database :size="17" />
+          <span>Ngân Hàng Câu Hỏi ({{ stats.publishedQuestions || 20 }})</span>
+        </router-link>
+        <a
+          :href="obsLandscapeUrl"
+          target="_blank"
+          rel="noopener"
+          class="btn btn-cyan"
+        >
+          <ExternalLink :size="17" />
+          <span>Mở Màn Hình OBS Game Show</span>
+        </a>
+      </nav>
+    </header>
+
+    <!-- Status Notification Banner -->
+    <div v-if="toastMessage" class="toast-banner" :class="`toast-${toastType}`">
+      <span>{{ toastMessage }}</span>
+      <button type="button" @click="toastMessage = ''">Đóng</button>
+    </div>
+
+    <!-- Main Dashboard Grid -->
+    <div class="dash-main-grid">
+      <!-- Left Column: TikTok Connector, Room Config, Simulator -->
+      <div class="dash-col">
+        <!-- 1. Kết nối TikTok LIVE (Mục 6.4 & 6.5) -->
+        <section class="panel-card">
+          <div class="panel-header">
+            <div class="panel-title-group">
+              <Radio :size="20" class="icon-cyan" />
+              <h2>1. Kết nối TikTok LIVE</h2>
+            </div>
+            <span class="badge" :class="connectionBadgeClass">
+              {{ tiktokStatus.state }}
+            </span>
+          </div>
+
+          <p class="panel-desc">
+            Nhập <strong>@username</strong> kênh TikTok đang mở LIVE (không nhập mật khẩu).
+          </p>
+
+          <form class="connect-form" @submit.prevent="handleConnectTikTok">
+            <input
+              v-model="tiktokUsernameInput"
+              type="text"
+              class="input-control"
+              placeholder="Ví dụ: @vinhnq_live"
+              :disabled="isConnectingTikTok"
+            />
+            <button
+              v-if="tiktokStatus.state !== 'CONNECTED'"
+              type="submit"
+              class="btn btn-cyan"
+              :disabled="isConnectingTikTok"
+            >
+              <Plug :size="16" />
+              <span>{{ isConnectingTikTok ? 'Đang kết nối...' : 'Kết nối LIVE' }}</span>
+            </button>
+            <button
+              v-else
+              type="button"
+              class="btn btn-danger"
+              @click="handleDisconnectTikTok"
+            >
+              <Power :size="16" />
+              <span>Ngắt kết nối</span>
+            </button>
+          </form>
+
+          <div class="tiktok-metrics tabular-nums">
+            <div class="tt-metric">
+              <span>Trạng thái</span>
+              <strong>{{ formatConnectionState(tiktokStatus.state) }}</strong>
+            </div>
+            <div class="tt-metric">
+              <span>TikTok Room ID</span>
+              <strong>{{ tiktokStatus.tiktokRoomId || 'Chưa kết nối' }}</strong>
+            </div>
+            <div class="tt-metric">
+              <span>Sự kiện đã nhận</span>
+              <strong>{{ tiktokStatus.eventsReceived || 0 }}</strong>
+            </div>
+          </div>
+
+          <div v-if="tiktokStatus.lastError" class="connection-alert">
+            <AlertTriangle :size="18" />
+            <span>{{ tiktokStatus.lastError }}</span>
+          </div>
+        </section>
+
+        <!-- 2. Cấu hình Phòng chơi & Bộ câu hỏi (Mục 2 & 4.5) -->
+        <section class="panel-card">
+          <div class="panel-header">
+            <div class="panel-title-group">
+              <Settings :size="20" class="icon-purple" />
+              <h2>2. Cấu hình Phòng & Trận đấu</h2>
+            </div>
+            <span class="badge badge-cyan tabular-nums">Mã: {{ roomCode }}</span>
+          </div>
+
+          <div class="config-form-grid">
+            <div class="form-field full-span">
+              <label>Tên chương trình hiển thị trên OBS</label>
+              <input
+                v-model="configForm.title"
+                type="text"
+                class="input-control"
+                placeholder="Knowledge Battle — Đấu Trường Tri Thức"
+              />
+            </div>
+
+            <div class="form-field">
+              <label>Danh mục câu hỏi</label>
+              <select v-model="configForm.categoryId" class="select-control">
+                <option value="ALL">Tất cả danh mục (Tổng hợp)</option>
+                <option v-for="cat in categories" :key="cat.id" :value="cat.id">
+                  {{ cat.name }} ({{ cat.publishedCount }} câu)
+                </option>
+              </select>
+            </div>
+
+            <div class="form-field">
+              <label>Độ khó</label>
+              <select v-model="configForm.difficulty" class="select-control">
+                <option value="ALL">Hỗn hợp (Đủ mọi mức độ)</option>
+                <option value="EASY">Dễ (Khởi động)</option>
+                <option value="MEDIUM">Trung bình</option>
+                <option value="HARD">Khó (Thử thách)</option>
+              </select>
+            </div>
+
+            <div class="form-field">
+              <label>Số lượng câu hỏi / trận</label>
+              <select v-model.number="configForm.questionCount" class="select-control tabular-nums">
+                <option :value="5">5 câu hỏi (Nhanh)</option>
+                <option :value="10">10 câu hỏi (Tiêu chuẩn)</option>
+                <option :value="15">15 câu hỏi</option>
+                <option :value="20">20 câu hỏi (Marathon)</option>
+                <option :value="30">30 câu hỏi</option>
+                <option :value="50">50 câu hỏi</option>
+                <option :value="100">100 câu hỏi</option>
+                <option :value="0">🔥 Chạy hết TẤT CẢ câu hỏi ({{ stats.publishedQuestions || 'Toàn bộ' }} câu)</option>
+              </select>
+            </div>
+
+            <div class="form-field">
+              <label>Thời gian trả lời mỗi câu</label>
+              <select v-model.number="configForm.timePerQuestion" class="select-control tabular-nums">
+                <option :value="15">15 giây / câu (Test nhanh)</option>
+                <option :value="20">20 giây / câu</option>
+                <option :value="25">25 giây / câu (Chuẩn bù độ trễ TikTok LIVE)</option>
+                <option :value="30">30 giây / câu</option>
+                <option :value="45">45 giây / câu</option>
+              </select>
+            </div>
+
+            <div class="form-field full-span checkbox-row">
+              <label class="checkbox-label">
+                <input v-model="configForm.autoAdvance" type="checkbox" />
+                <span>Tự động chuyển qua Công bố đáp án → Bảng xếp hạng → Câu tiếp theo</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="panel-footer" style="display: flex; gap: 0.65rem; flex-wrap: wrap;">
+            <button type="button" class="btn btn-secondary" @click="saveConfig">
+              <Save :size="16" />
+              <span>Lưu cấu hình phòng</span>
+            </button>
+            <button type="button" class="btn btn-gold" @click="handleQuickAddRandomQuestions">
+              <Sparkles :size="16" />
+              <span>+10 Câu hỏi Random</span>
+            </button>
+          </div>
+        </section>
+
+        <!-- 3. Thiết lập OBS Browser Source (Mục 7.3) -->
+        <section class="panel-card">
+          <div class="panel-header">
+            <div class="panel-title-group">
+              <Monitor :size="20" class="icon-gold" />
+              <h2>3. Đường dẫn OBS Browser Source</h2>
+            </div>
+          </div>
+
+          <div class="obs-links-list">
+            <div class="obs-url-box">
+              <div class="obs-url-meta">
+                <strong>Layout Ngang (1920 × 1080)</strong>
+                <span>Chuẩn màn hình PC / TV Game Show</span>
+              </div>
+              <div class="obs-url-copy">
+                <input :value="obsLandscapeUrl" readonly class="input-control mono-input" />
+                <button type="button" class="btn btn-secondary" @click="copyUrl(obsLandscapeUrl)">
+                  <Copy :size="15" />
+                  <span>Sao chép</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="obs-url-box">
+              <div class="obs-url-meta">
+                <strong>Layout Dọc TikTok (1080 × 1920)</strong>
+                <span>Tối ưu chữ lớn cho người xem trên điện thoại</span>
+              </div>
+              <div class="obs-url-copy">
+                <input :value="obsVerticalUrl" readonly class="input-control mono-input" />
+                <button type="button" class="btn btn-secondary" @click="copyUrl(obsVerticalUrl)">
+                  <Copy :size="15" />
+                  <span>Sao chép</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Right Column: Match Director, Live Preview & Simulator -->
+      <div class="dash-col">
+        <!-- 4. Điều khiển trận đấu (Match Director Console) -->
+        <section class="panel-card director-card">
+          <div class="panel-header">
+            <div class="panel-title-group">
+              <Play :size="20" class="icon-cyan" />
+              <h2>4. Điều Khiển Trận Đấu Trực Tiếp</h2>
+            </div>
+            <div class="status-pills tabular-nums">
+              <span class="badge badge-purple">Trạng thái: {{ roomState?.status || 'WAITING' }}</span>
+              <span class="badge badge-cyan">Màn hình: {{ roomState?.phase || 'WAITING_ROOM' }}</span>
+            </div>
+          </div>
+
+          <div class="director-controls-grid">
+            <button
+              type="button"
+              class="btn btn-cyan"
+              :disabled="roomState?.status === 'PLAYING'"
+              @click="handleStartMatch"
+            >
+              <Play :size="17" />
+              <span>Bắt đầu trận đấu mới</span>
+            </button>
+
+            <button
+              type="button"
+              class="btn btn-gold"
+              :disabled="!roomState?.isQuestionOpen"
+              @click="handleRevealNow"
+            >
+              <CheckCircle2 :size="17" />
+              <span>Khóa câu & Chấm điểm ngay</span>
+            </button>
+
+            <button
+              type="button"
+              class="btn btn-purple"
+              :disabled="roomState?.status !== 'PLAYING'"
+              @click="handleNextStep"
+            >
+              <SkipForward :size="17" />
+              <span>Sang câu tiếp theo</span>
+            </button>
+
+            <button
+              type="button"
+              class="btn btn-secondary"
+              :disabled="roomState?.status !== 'PLAYING'"
+              @click="handleShowLeaderboard"
+            >
+              <Trophy :size="17" />
+              <span>Hiện Bảng xếp hạng</span>
+            </button>
+
+            <button
+              v-if="roomState?.status !== 'PAUSED'"
+              type="button"
+              class="btn btn-secondary"
+              :disabled="roomState?.status !== 'PLAYING'"
+              @click="handlePauseMatch"
+            >
+              <Pause :size="17" />
+              <span>Tạm dừng</span>
+            </button>
+            <button
+              v-else
+              type="button"
+              class="btn btn-cyan"
+              @click="handleResumeMatch"
+            >
+              <Play :size="17" />
+              <span>Tiếp tục trận đấu</span>
+            </button>
+
+            <button
+              type="button"
+              class="btn btn-danger"
+              @click="handleResetRoom"
+            >
+              <RotateCcw :size="17" />
+              <span>Về Phòng chờ (Reset)</span>
+            </button>
+          </div>
+        </section>
+
+        <!-- 5. Bộ Giả Lập Sự Kiện TikTok LIVE (Mục 1.1, 10.1, 14) -->
+        <section class="panel-card simulator-card">
+          <div class="panel-header">
+            <div class="panel-title-group">
+              <Sparkles :size="20" class="icon-gold" />
+              <h2>5. Bộ Giả Lập Sự Kiện TikTok LIVE (Kiểm thử MVP)</h2>
+            </div>
+            <span class="badge badge-gold">Test độc lập không cần mở LIVE</span>
+          </div>
+
+          <div class="sim-row">
+            <div class="sim-user-inputs">
+              <input
+                v-model="simUser.nickname"
+                type="text"
+                class="input-control"
+                placeholder="Tên hiển thị (VD: Minh Anh)"
+              />
+              <input
+                v-model="simUser.username"
+                type="text"
+                class="input-control"
+                placeholder="Username (VD: minhanh_99)"
+              />
+            </div>
+
+            <div class="sim-quick-answers">
+              <span>Gửi bình luận đáp án:</span>
+              <div class="sim-answer-btns">
+                <button
+                  v-for="opt in (['A', 'B', 'C', 'D'] as const)"
+                  :key="opt"
+                  type="button"
+                  class="btn btn-secondary sim-opt-btn"
+                  @click="sendSimulatedComment(opt)"
+                >
+                  Bình luận {{ opt }}
+                </button>
+              </div>
+            </div>
+
+            <div class="sim-crowd-actions">
+              <button type="button" class="btn btn-cyan" @click="triggerCrowd(10)">
+                <Users :size="16" />
+                <span>Giả lập 10 người xem trả lời đồng thời</span>
+              </button>
+              <button type="button" class="btn btn-secondary" @click="testDoubleAnswerCheat">
+                <ShieldAlert :size="16" />
+                <span>Test chống gian lận: Gửi A rồi đổi sang B</span>
+              </button>
+            </div>
+
+            <div class="sim-gifts-strip">
+              <span>Giả lập tặng quà TikTok (Mục 3.4):</span>
+              <div class="sim-gift-btns">
+                <button
+                  v-for="g in gifts"
+                  :key="g.giftId"
+                  type="button"
+                  class="btn btn-secondary gift-sim-btn"
+                  @click="sendSimulatedGift(g)"
+                >
+                  <Sparkles :size="14" class="icon-gold" />
+                  <span>{{ g.giftName }}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 6. Màn hình Preview OBS trực tiếp ngay trên Dashboard -->
+        <section class="panel-card preview-card">
+          <div class="panel-header">
+            <div class="panel-title-group">
+              <Eye :size="20" class="icon-cyan" />
+              <h2>6. Xem Trước Màn Hình Game Show (Realtime Preview)</h2>
+            </div>
+            <span class="badge badge-emerald">Đồng bộ Socket.IO</span>
+          </div>
+
+          <div class="embedded-preview-wrapper">
+            <GameShowView :roomCodeProp="roomCode" :embedded="true" />
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
+import {
+  Radio,
+  Plug,
+  Power,
+  Settings,
+  Save,
+  Monitor,
+  Copy,
+  Play,
+  Pause,
+  SkipForward,
+  RotateCcw,
+  Trophy,
+  CheckCircle2,
+  Sparkles,
+  Users,
+  ShieldAlert,
+  AlertTriangle,
+  Database,
+  ExternalLink,
+  Eye,
+} from 'lucide-vue-next';
+import { api } from '../services/api';
+import { createRoomSocket } from '../services/socket';
+import GameShowView from './GameShowView.vue';
+import type { Socket } from 'socket.io-client';
+
+const roomCode = ref('KB2026');
+const stats = ref<any>({});
+const categories = ref<any[]>([]);
+const gifts = ref<any[]>([]);
+const roomState = ref<any>(null);
+const tiktokStatus = ref<any>({
+  state: 'DISCONNECTED',
+  tiktokRoomId: null,
+  eventsReceived: 0,
+  lastError: null,
+});
+
+const tiktokUsernameInput = ref('vinhnq_live');
+const isConnectingTikTok = ref(false);
+const toastMessage = ref('');
+const toastType = ref<'info' | 'success' | 'error'>('info');
+
+const configForm = reactive({
+  title: 'Knowledge Battle — Đấu Trường Tri Thức',
+  categoryId: 'ALL',
+  difficulty: 'ALL',
+  questionCount: 10,
+  timePerQuestion: 25,
+  autoAdvance: true,
+});
+
+const simUser = reactive({
+  nickname: 'Minh Anh 🌸',
+  username: 'minhanh_99',
+});
+
+let socket: Socket | null = null;
+
+const obsLandscapeUrl = computed(
+  () => `${window.location.origin}/game/${roomCode.value}`
+);
+const obsVerticalUrl = computed(
+  () => `${window.location.origin}/game/${roomCode.value}?layout=vertical`
+);
+
+const connectionBadgeClass = computed(() => {
+  const s = tiktokStatus.value?.state;
+  if (s === 'CONNECTED') return 'badge-emerald';
+  if (s === 'CONNECTING' || s === 'RECONNECTING') return 'badge-gold';
+  if (s === 'ERROR') return 'badge-rose';
+  return 'badge-purple';
+});
+
+function showToast(msg: string, type: 'info' | 'success' | 'error' = 'info') {
+  toastMessage.value = msg;
+  toastType.value = type;
+  setTimeout(() => {
+    if (toastMessage.value === msg) toastMessage.value = '';
+  }, 4500);
+}
+
+function formatConnectionState(state: string) {
+  const map: Record<string, string> = {
+    DISCONNECTED: 'Chưa kết nối',
+    CONNECTING: 'Đang thiết lập kết nối...',
+    CONNECTED: 'Đang nhận sự kiện LIVE',
+    RECONNECTING: 'Đang tự động kết nối lại...',
+    ERROR: 'Chưa LIVE / Lỗi kết nối',
+  };
+  return map[state] || state;
+}
+
+async function loadDashboardData() {
+  try {
+    const [healthRes, roomRes, catRes, giftRes] = await Promise.all([
+      api.getHealth(),
+      api.getRoom(roomCode.value),
+      api.getCategories(),
+      api.getGifts(),
+    ]);
+
+    stats.value = healthRes.stats || {};
+    categories.value = catRes || [];
+    gifts.value = giftRes || [];
+
+    if (roomRes.roomState) {
+      roomState.value = roomRes.roomState;
+      configForm.title = roomRes.roomState.title || configForm.title;
+      if (roomRes.roomState.tiktokUsername) {
+        tiktokUsernameInput.value = roomRes.roomState.tiktokUsername;
+      }
+      if (roomRes.roomState.config) {
+        configForm.categoryId = roomRes.roomState.config.categoryId || 'ALL';
+        configForm.difficulty = roomRes.roomState.config.difficulty || 'ALL';
+        configForm.questionCount =
+          roomRes.roomState.config.questionCount !== undefined &&
+          roomRes.roomState.config.questionCount !== null
+            ? Number(roomRes.roomState.config.questionCount)
+            : 10;
+        configForm.timePerQuestion = roomRes.roomState.config.timePerQuestion || 15;
+        configForm.autoAdvance = Boolean(roomRes.roomState.config.autoAdvance);
+      }
+    }
+    if (roomRes.tiktokStatus) {
+      tiktokStatus.value = roomRes.tiktokStatus;
+    }
+  } catch (err: any) {
+    showToast(err.message || 'Không thể tải dữ liệu dashboard', 'error');
+  }
+}
+
+async function handleConnectTikTok() {
+  if (!tiktokUsernameInput.value.trim()) {
+    showToast('Vui lòng nhập username TikTok', 'error');
+    return;
+  }
+  isConnectingTikTok.value = true;
+  try {
+    const res = await api.connectTikTok(roomCode.value, tiktokUsernameInput.value);
+    tiktokStatus.value = res;
+    if (res.state === 'CONNECTED') {
+      showToast(`Đã kết nối thành công tới phiên LIVE của @${res.username}`, 'success');
+    } else if (res.error) {
+      showToast(res.error, 'error');
+    }
+  } catch (err: any) {
+    showToast(err.message, 'error');
+  } finally {
+    isConnectingTikTok.value = false;
+  }
+}
+
+async function handleDisconnectTikTok() {
+  const res = await api.disconnectTikTok(roomCode.value);
+  tiktokStatus.value = res;
+  showToast('Đã ngắt kết nối TikTok LIVE', 'info');
+}
+
+async function saveConfig() {
+  try {
+    await api.updateRoomConfig(roomCode.value, {
+      ...configForm,
+      tiktokUsername: tiktokUsernameInput.value.trim().replace(/^@/, ''),
+    });
+    showToast('Đã lưu cấu hình phòng chơi thành công!', 'success');
+  } catch (err: any) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function handleQuickAddRandomQuestions() {
+  try {
+    const res = await api.generateRandomQuestions(10, 'PUBLISHED');
+    await loadDashboardData();
+    showToast(`Đã bổ sung thêm ${res.generatedCount} câu hỏi ngẫu nhiên vào Ngân hàng!`, 'success');
+  } catch (err: any) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function handleStartMatch() {
+  try {
+    await saveConfig();
+    await api.startGame(roomCode.value, false);
+    showToast('Trận đấu đang bắt đầu!', 'success');
+  } catch (err: any) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function handleRevealNow() {
+  await api.revealQuestion(roomCode.value);
+}
+
+async function handleNextStep() {
+  await api.nextStep(roomCode.value);
+}
+
+async function handleShowLeaderboard() {
+  await api.showLeaderboard(roomCode.value);
+}
+
+async function handlePauseMatch() {
+  await api.pauseGame(roomCode.value);
+  showToast('Đã tạm dừng trận đấu', 'info');
+}
+
+async function handleResumeMatch() {
+  await api.resumeGame(roomCode.value);
+  showToast('Đã tiếp tục trận đấu', 'success');
+}
+
+async function handleResetRoom() {
+  await api.resetGame(roomCode.value);
+  showToast('Đã đưa phòng về trạng thái Phòng chờ (WAITING)', 'info');
+}
+
+async function sendSimulatedComment(content: string) {
+  const res = await api.simulateEvent(roomCode.value, {
+    type: 'COMMENT',
+    userId: `sim-${simUser.username}`,
+    username: simUser.username,
+    nickname: simUser.nickname,
+    content,
+  });
+  if (res.reason === 'ALREADY_ANSWERED') {
+    showToast(
+      `Chống gian lận: ${simUser.nickname} đã trả lời câu này rồi, chỉ tính đáp án đầu tiên!`,
+      'error'
+    );
+  } else if (res.reason === 'QUESTION_CLOSED') {
+    showToast(
+      `Đã ghi nhận ${simUser.nickname} tham gia / bình luận ngoài giờ mở câu hỏi.`,
+      'info'
+    );
+  } else {
+    showToast(`${simUser.nickname} vừa gửi đáp án "${content}"`, 'success');
+  }
+}
+
+async function triggerCrowd(count: number) {
+  await api.simulateCrowd(roomCode.value, count);
+  showToast(`Đang giả lập ${count} người xem bình luận đáp án A/B/C/D đồng thời!`, 'success');
+}
+
+async function testDoubleAnswerCheat() {
+  await api.simulateEvent(roomCode.value, {
+    type: 'COMMENT',
+    userId: `sim-${simUser.username}`,
+    username: simUser.username,
+    nickname: simUser.nickname,
+    content: 'A',
+  });
+  const second = await api.simulateEvent(roomCode.value, {
+    type: 'COMMENT',
+    userId: `sim-${simUser.username}`,
+    username: simUser.username,
+    nickname: simUser.nickname,
+    content: 'B',
+  });
+  if (!second.acceptedAnswer) {
+    showToast(
+      'Kiểm thử thành công: Hệ thống chỉ nhận đáp án A đầu tiên và từ chối đáp án B kế tiếp!',
+      'success'
+    );
+  }
+}
+
+async function sendSimulatedGift(gift: any) {
+  await api.simulateEvent(roomCode.value, {
+    type: 'GIFT',
+    userId: `sim-${simUser.username}`,
+    username: simUser.username,
+    nickname: simUser.nickname,
+    giftId: gift.giftId,
+    giftName: gift.giftName,
+  });
+  showToast(`Đã kích hoạt hiệu ứng quà tặng: ${gift.giftName}`, 'success');
+}
+
+async function copyUrl(url: string) {
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast('Đã sao chép URL vào bộ nhớ tạm — dán vào OBS Browser Source!', 'success');
+  } catch {
+    showToast('Không thể tự động sao chép, vui lòng bôi đen và copy.', 'info');
+  }
+}
+
+onMounted(async () => {
+  await loadDashboardData();
+  socket = createRoomSocket(roomCode.value);
+
+  socket.on('room.state', (payload) => {
+    roomState.value = payload;
+  });
+
+  socket.on('tiktok.status', (status) => {
+    tiktokStatus.value = status;
+  });
+});
+
+onBeforeUnmount(() => {
+  socket?.disconnect();
+});
+</script>
+
+<style scoped>
+.dashboard-page {
+  min-height: 100vh;
+  padding: 1.5rem 2rem 3rem;
+  max-width: 1640px;
+  margin: 0 auto;
+}
+
+.dash-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 1.5rem;
+}
+
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.brand-badge {
+  width: 48px;
+  height: 48px;
+  border-radius: 0.875rem;
+  background: var(--accent-cyan);
+  color: #050814;
+  font-weight: 900;
+  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.topbar-brand h1 {
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.topbar-brand p {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.toast-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.25rem;
+  border-radius: 0.75rem;
+  margin-bottom: 1.25rem;
+  font-weight: 600;
+  font-size: 0.92rem;
+  background: rgba(0, 240, 255, 0.14);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+}
+
+.toast-success {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #6ee7b7;
+}
+
+.toast-error {
+  background: rgba(244, 63, 94, 0.18);
+  border-color: rgba(244, 63, 94, 0.45);
+  color: #fda4af;
+}
+
+.dash-main-grid {
+  display: grid;
+  grid-template-columns: 540px 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 1200px) {
+  .dash-main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dash-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.panel-card {
+  background: var(--surface-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 1rem;
+  padding: 1.35rem 1.5rem;
+  box-shadow: var(--shadow-card);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.panel-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.panel-title-group h2 {
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.panel-desc {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.85rem;
+}
+
+.connect-form {
+  display: flex;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.tiktok-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.65rem;
+}
+
+.tt-metric {
+  padding: 0.65rem 0.8rem;
+  border-radius: 0.65rem;
+  background: rgba(8, 12, 28, 0.7);
+  border: 1px solid var(--border-subtle);
+}
+
+.tt-metric span {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.tt-metric strong {
+  font-size: 0.88rem;
+  color: var(--text-primary);
+}
+
+.connection-alert {
+  margin-top: 0.85rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.65rem;
+  background: rgba(244, 63, 94, 0.14);
+  border: 1px solid rgba(244, 63, 94, 0.35);
+  color: #fda4af;
+  font-size: 0.84rem;
+}
+
+.config-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.9rem;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.form-field.full-span {
+  grid-column: 1 / -1;
+}
+
+.form-field label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  cursor: pointer;
+}
+
+.panel-footer {
+  margin-top: 1.1rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.obs-links-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.obs-url-box {
+  padding: 0.85rem;
+  border-radius: 0.75rem;
+  background: rgba(8, 12, 28, 0.68);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.obs-url-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.82rem;
+}
+
+.obs-url-meta span {
+  color: var(--text-muted);
+}
+
+.obs-url-copy {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.mono-input {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+
+.status-pills {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.director-controls-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+}
+
+/* Simulator */
+.sim-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.95rem;
+}
+
+.sim-user-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.sim-quick-answers,
+.sim-gifts-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+}
+
+.sim-answer-btns,
+.sim-gift-btns,
+.sim-crowd-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.sim-opt-btn {
+  flex: 1;
+  min-width: 110px;
+}
+
+.embedded-preview-wrapper {
+  border-radius: 0.875rem;
+  overflow: hidden;
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  max-height: 640px;
+  overflow-y: auto;
+}
+
+.icon-cyan {
+  color: var(--accent-cyan);
+}
+.icon-gold {
+  color: var(--accent-gold);
+}
+.icon-purple {
+  color: var(--accent-purple-bright);
+}
+
+@media (max-width: 768px) {
+  .dashboard-page {
+    padding: 1rem 0.85rem 2.5rem;
+  }
+
+  .dash-topbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .topbar-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .topbar-actions .btn {
+    width: 100%;
+  }
+
+  .panel-card {
+    padding: 1.05rem;
+  }
+
+  .panel-header {
+    flex-wrap: wrap;
+  }
+
+  .connect-form,
+  .obs-url-copy {
+    flex-direction: column;
+  }
+
+  .tiktok-metrics,
+  .config-form-grid,
+  .director-controls-grid,
+  .sim-user-inputs {
+    grid-template-columns: 1fr;
+  }
+
+  .director-controls-grid .btn {
+    min-height: 46px;
+  }
+}
+</style>
+

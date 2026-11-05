@@ -1,0 +1,244 @@
+:root {
+  --bg-obsidian: #060814;
+  --bg-indigo-deep: #0d1026;
+  --bg-purple-stage: #150d30;
+  --surface-panel: rgba(17, 22, 48, 0.88);
+  --surface-elevated: rgba(26, 32, 68, 0.94);
+  --surface-interactive: rgba(34, 42, 86, 0.92);
+
+  --text-primary: #f8fafc;
+  --text-secondary: #bdd0f2;
+  --text-muted: #8ea4d2;
+
+  --accent-cyan: #00f0ff;
+  --accent-cyan-dim: rgba(0, 240, 255, 0.16);
+  --accent-purple: #9333ea;
+  --accent-purple-bright: #c084fc;
+  --accent-gold: #facc15;
+  --accent-amber: #f59e0b;
+  --accent-emerald: #10b981;
+  --accent-rose: #f43f5e;
+
+  --border-subtle: rgba(142, 164, 210, 0.18);
+  --border-cyan: rgba(0, 240, 255, 0.45);
+  --border-gold: rgba(250, 204, 21, 0.55);
+
+  --shadow-stage: 0 18px 42px -10px rgba(3, 5, 16, 0.78);
+  --shadow-card: 0 10px 28px -6px rgba(4, 7, 22, 0.65);
+
+  --font-sans: 'Be Vietnam Pro', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+::selection {
+  background: var(--accent-cyan);
+  color: var(--bg-obsidian);
+}
+
+html,
+body {
+  background-color: var(--bg-obsidian);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  caret-color: var(--accent-cyan);
+  overflow-x: hidden;
+}
+
+/* Custom themed scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-obsidian);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #253166;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-cyan);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+/* Shared Operate & Stage Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.125rem;
+  border-radius: 0.625rem;
+  font-weight: 700;
+  font-size: 0.925rem;
+  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+  border: 1px solid transparent;
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.btn-cyan {
+  background: var(--accent-cyan);
+  color: #040814;
+  box-shadow: 0 8px 20px -4px rgba(0, 240, 255, 0.35);
+}
+
+.btn-cyan:hover:not(:disabled) {
+  background: #38f6ff;
+  box-shadow: 0 10px 24px -4px rgba(0, 240, 255, 0.5);
+}
+
+.btn-gold {
+  background: var(--accent-gold);
+  color: #090a10;
+  box-shadow: 0 8px 20px -4px rgba(250, 204, 21, 0.35);
+}
+
+.btn-gold:hover:not(:disabled) {
+  background: #fde047;
+}
+
+.btn-purple {
+  background: var(--accent-purple);
+  color: #ffffff;
+  box-shadow: 0 8px 20px -4px rgba(147, 51, 234, 0.4);
+}
+
+.btn-purple:hover:not(:disabled) {
+  background: #a855f7;
+}
+
+.btn-secondary {
+  background: var(--surface-interactive);
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--border-cyan);
+  background: rgba(45, 56, 112, 0.95);
+}
+
+.btn-danger {
+  background: rgba(244, 63, 94, 0.16);
+  color: #fda4af;
+  border-color: rgba(244, 63, 94, 0.4);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: rgba(244, 63, 94, 0.28);
+}
+
+/* Form controls */
+.input-control,
+.select-control,
+.textarea-control {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  border-radius: 0.5rem;
+  background: rgba(8, 12, 28, 0.85);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  font-size: 0.925rem;
+  transition: border-color 0.15s ease;
+}
+
+.input-control::placeholder,
+.textarea-control::placeholder {
+  color: var(--text-muted);
+}
+
+.input-control:focus,
+.select-control:focus,
+.textarea-control:focus {
+  border-color: var(--accent-cyan);
+  outline: none;
+}
+
+/* Status pills */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.badge-cyan {
+  background: rgba(0, 240, 255, 0.14);
+  color: var(--accent-cyan);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+}
+
+.badge-gold {
+  background: rgba(250, 204, 21, 0.15);
+  color: var(--accent-gold);
+  border: 1px solid rgba(250, 204, 21, 0.4);
+}
+
+.badge-emerald {
+  background: rgba(16, 185, 129, 0.16);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.badge-rose {
+  background: rgba(244, 63, 94, 0.16);
+  color: #fb7185;
+  border: 1px solid rgba(244, 63, 94, 0.4);
+}
+
+.badge-purple {
+  background: rgba(147, 51, 234, 0.2);
+  color: #d8b4fe;
+  border: 1px solid rgba(147, 51, 234, 0.45);
+}
+

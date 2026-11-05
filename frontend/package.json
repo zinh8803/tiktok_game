@@ -1,0 +1,27 @@
+{
+  "name": "knowledge-battle-frontend",
+  "version": "1.0.0",
+  "description": "Knowledge Battle Frontend - Streamer Dashboard, Admin Question Bank & Phaser 3 OBS Game Show",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --port 3000"
+  },
+  "dependencies": {
+    "gsap": "^3.12.5",
+    "lucide-vue-next": "^0.363.0",
+    "phaser": "^3.80.1",
+    "pinia": "^2.1.7",
+    "socket.io-client": "^4.7.5",
+    "vue": "^3.4.21",
+    "vue-router": "^4.3.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.4",
+    "typescript": "^5.4.2",
+    "vite": "^5.2.0"
+  }
+}
+

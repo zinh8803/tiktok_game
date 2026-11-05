@@ -1,0 +1,15 @@
+{
+  "name": "knowledge-battle-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Knowledge Battle - TikTok LIVE Game Show (Backend + Frontend Runner)",
+  "scripts": {
+    "start": "node run-all.js",
+    "dev": "node run-all.js",
+    "start:be": "npm --prefix backend run start",
+    "start:fe": "npm --prefix frontend run dev",
+    "build": "npm --prefix backend run build && npm --prefix frontend run build",
+    "test": "npm --prefix backend test"
+  }
+}
+
