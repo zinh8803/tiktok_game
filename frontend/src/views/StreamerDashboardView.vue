@@ -193,7 +193,7 @@
           <div class="panel-header">
             <div class="panel-title-group">
               <Monitor :size="20" class="icon-gold" />
-              <h2>3. Đường dẫn OBS Browser Source</h2>
+              <h2>3. Đường dẫn OBS Browser Source & Chỉnh Khớp Điện Thoại</h2>
             </div>
           </div>
 
@@ -215,7 +215,7 @@
             <div class="obs-url-box">
               <div class="obs-url-meta">
                 <strong>Layout Dọc TikTok (1080 × 1920)</strong>
-                <span>Tối ưu chữ lớn cho người xem trên điện thoại</span>
+                <span>Tự động co giãn & căn khớp màn hình điện thoại</span>
               </div>
               <div class="obs-url-copy">
                 <input :value="obsVerticalUrl" readonly class="input-control mono-input" />
@@ -223,6 +223,114 @@
                   <Copy :size="15" />
                   <span>Sao chép</span>
                 </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bộ chỉnh khớp khung hình TikTok Điện thoại Real-time -->
+          <div class="calib-dashboard-box tabular-nums" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-subtle);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem;">
+              <strong style="color: var(--accent-cyan); font-size: 0.92rem;">
+                🎛️ Khung TikTok Điện Thoại ({{ dashLayoutCalib.frameWidth }} × {{ dashLayoutCalib.frameHeight }} px)
+              </strong>
+              <button type="button" class="btn btn-secondary" style="padding: 0.25rem 0.65rem; font-size: 0.78rem;" @click="applyDashLayoutPreset('362x444')">
+                Chuẩn 362×444
+              </button>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-bottom: 0.85rem;">
+              <button
+                type="button"
+                class="btn"
+                :class="dashLayoutCalib.preset === '362x444' ? 'btn-cyan' : 'btn-secondary'"
+                style="padding: 0.45rem 0.5rem; font-size: 0.78rem; justify-content: center;"
+                @click="applyDashLayoutPreset('362x444')"
+              >
+                📱 Chuẩn 362 × 444 px
+              </button>
+              <button
+                type="button"
+                class="btn"
+                :class="dashLayoutCalib.preset === 'tiktok-narrow' ? 'btn-cyan' : 'btn-secondary'"
+                style="padding: 0.45rem 0.5rem; font-size: 0.78rem; justify-content: center;"
+                @click="applyDashLayoutPreset('tiktok-narrow')"
+              >
+                📐 Nhỏ gọn (320 × 400)
+              </button>
+              <button
+                type="button"
+                class="btn"
+                :class="dashLayoutCalib.preset === 'tiktok-safe-zone' ? 'btn-cyan' : 'btn-secondary'"
+                style="padding: 0.45rem 0.5rem; font-size: 0.78rem; justify-content: center;"
+                @click="applyDashLayoutPreset('tiktok-safe-zone')"
+              >
+                💬 Đẩy lên né Chat đáy
+              </button>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem;">
+              <div class="form-field">
+                <label style="display: flex; justify-content: space-between;">
+                  <span>Chiều rộng khung (px)</span>
+                  <strong style="color: var(--accent-gold);">{{ dashLayoutCalib.frameWidth }}px</strong>
+                </label>
+                <input
+                  v-model.number="dashLayoutCalib.frameWidth"
+                  type="range"
+                  min="260"
+                  max="640"
+                  step="2"
+                  style="width: 100%; accent-color: var(--accent-cyan); cursor: pointer;"
+                  @input="emitDashLayoutChange"
+                />
+              </div>
+
+              <div class="form-field">
+                <label style="display: flex; justify-content: space-between;">
+                  <span>Chiều cao khung (px)</span>
+                  <strong style="color: var(--accent-gold);">{{ dashLayoutCalib.frameHeight }}px</strong>
+                </label>
+                <input
+                  v-model.number="dashLayoutCalib.frameHeight"
+                  type="range"
+                  min="320"
+                  max="840"
+                  step="2"
+                  style="width: 100%; accent-color: var(--accent-cyan); cursor: pointer;"
+                  @input="emitDashLayoutChange"
+                />
+              </div>
+
+              <div class="form-field">
+                <label style="display: flex; justify-content: space-between;">
+                  <span>Thu phóng kích thước (Zoom)</span>
+                  <strong style="color: var(--accent-gold);">{{ dashLayoutCalib.scale }}%</strong>
+                </label>
+                <input
+                  v-model.number="dashLayoutCalib.scale"
+                  type="range"
+                  min="50"
+                  max="130"
+                  step="1"
+                  style="width: 100%; accent-color: var(--accent-cyan); cursor: pointer;"
+                  @input="emitDashLayoutChange"
+                />
+              </div>
+
+              <div class="form-field">
+                <label style="display: flex; justify-content: space-between;">
+                  <span>Đẩy Lên / Xuống (Tránh chat/avatar)</span>
+                  <strong style="color: var(--accent-gold);">{{ dashLayoutCalib.offsetY > 0 ? `+${dashLayoutCalib.offsetY}` : dashLayoutCalib.offsetY }}%</strong>
+                </label>
+                <input
+                  v-model.number="dashLayoutCalib.offsetY"
+                  type="range"
+                  min="-35"
+                  max="35"
+                  step="1"
+                  style="width: 100%; accent-color: var(--accent-cyan); cursor: pointer;"
+                  @input="emitDashLayoutChange"
+                />
               </div>
             </div>
           </div>
@@ -357,10 +465,39 @@
               </div>
             </div>
 
-            <div class="sim-crowd-actions">
+            <div class="sim-crowd-actions" style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+              <button
+                type="button"
+                class="btn"
+                :class="roomState?.autoCrowd?.enabled ? 'btn-danger' : 'btn-emerald'"
+                style="width: 100%; justify-content: center; font-weight: 800;"
+                @click="handleToggleAutoCrowd"
+              >
+                <Users :size="17" />
+                <span>
+                  {{
+                    roomState?.autoCrowd?.enabled
+                      ? `🟢 ĐANG BẬT: Tự động User Ra/Vào & Tự Chơi (50–100 người, hiện có ${roomState?.playerCount || 0} người) — Bấm để Tắt`
+                      : '🤖 BẬT Tự Động Giả Lập User Ra/Vào & Tự Chơi (50 – 100 người)'
+                  }}
+                </span>
+              </button>
+
               <button type="button" class="btn btn-cyan" @click="triggerCrowd(10)">
                 <Users :size="16" />
-                <span>Giả lập 10 người xem trả lời đồng thời</span>
+                <span>+10 người trả lời</span>
+              </button>
+              <button type="button" class="btn btn-cyan" @click="triggerCrowd(30)">
+                <Users :size="16" />
+                <span>+30 người trả lời</span>
+              </button>
+              <button type="button" class="btn btn-gold" @click="triggerCrowd(50)">
+                <Users :size="16" />
+                <span>+50 người trả lời</span>
+              </button>
+              <button type="button" class="btn btn-purple" @click="triggerCrowd(100)">
+                <Users :size="16" />
+                <span>+100 người trả lời</span>
               </button>
               <button type="button" class="btn btn-secondary" @click="testDoubleAnswerCheat">
                 <ShieldAlert :size="16" />
@@ -464,6 +601,94 @@ const simUser = reactive({
   nickname: 'Minh Anh 🌸',
   username: 'minhanh_99',
 });
+
+const STORAGE_CALIB_KEY = 'kb_vertical_layout_362x444_v3';
+const dashLayoutCalib = reactive({
+  frameWidth: 362,
+  frameHeight: 444,
+  scale: 100,
+  widthPercent: 96,
+  offsetX: 0,
+  offsetY: 0,
+  preset: '362x444',
+});
+
+function loadDashSavedCalib() {
+  if (typeof window === 'undefined') return;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_CALIB_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      dashLayoutCalib.frameWidth = Number(parsed.frameWidth ?? 362);
+      dashLayoutCalib.frameHeight = Number(parsed.frameHeight ?? 444);
+      dashLayoutCalib.scale = Number(parsed.scale ?? 100);
+      dashLayoutCalib.widthPercent = Number(parsed.widthPercent ?? 96);
+      dashLayoutCalib.offsetX = Number(parsed.offsetX ?? 0);
+      dashLayoutCalib.offsetY = Number(parsed.offsetY ?? 0);
+      dashLayoutCalib.preset = String(parsed.preset || '362x444');
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function broadcastDashCalib() {
+  const payload = {
+    frameWidth: dashLayoutCalib.frameWidth,
+    frameHeight: dashLayoutCalib.frameHeight,
+    scale: dashLayoutCalib.scale,
+    widthPercent: dashLayoutCalib.widthPercent,
+    offsetX: dashLayoutCalib.offsetX,
+    offsetY: dashLayoutCalib.offsetY,
+    preset: dashLayoutCalib.preset,
+  };
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(STORAGE_CALIB_KEY, JSON.stringify(payload));
+    } catch {
+      // ignore
+    }
+  }
+  socket?.emit('layout.update', {
+    roomCode: roomCode.value,
+    ...payload,
+  });
+}
+
+function applyDashLayoutPreset(preset: '362x444' | 'tiktok-narrow' | 'tiktok-safe-zone') {
+  if (preset === '362x444') {
+    dashLayoutCalib.frameWidth = 362;
+    dashLayoutCalib.frameHeight = 444;
+    dashLayoutCalib.scale = 100;
+    dashLayoutCalib.widthPercent = 96;
+    dashLayoutCalib.offsetX = 0;
+    dashLayoutCalib.offsetY = 0;
+    dashLayoutCalib.preset = '362x444';
+  } else if (preset === 'tiktok-narrow') {
+    dashLayoutCalib.frameWidth = 320;
+    dashLayoutCalib.frameHeight = 400;
+    dashLayoutCalib.scale = 100;
+    dashLayoutCalib.widthPercent = 90;
+    dashLayoutCalib.offsetX = 0;
+    dashLayoutCalib.offsetY = 0;
+    dashLayoutCalib.preset = 'tiktok-narrow';
+  } else if (preset === 'tiktok-safe-zone') {
+    dashLayoutCalib.frameWidth = 362;
+    dashLayoutCalib.frameHeight = 444;
+    dashLayoutCalib.scale = 96;
+    dashLayoutCalib.widthPercent = 96;
+    dashLayoutCalib.offsetX = 0;
+    dashLayoutCalib.offsetY = -8;
+    dashLayoutCalib.preset = 'tiktok-safe-zone';
+  }
+  broadcastDashCalib();
+  showToast('Đã cập nhật khung hình TikTok Điện thoại (362×444) ngay lập tức!', 'success');
+}
+
+function emitDashLayoutChange() {
+  dashLayoutCalib.preset = 'custom';
+  broadcastDashCalib();
+}
 
 let socket: Socket | null = null;
 
@@ -583,7 +808,11 @@ async function handleQuickAddRandomQuestions() {
   try {
     const res = await api.generateRandomQuestions(10, 'PUBLISHED');
     await loadDashboardData();
-    showToast(`Đã bổ sung thêm ${res.generatedCount} câu hỏi ngẫu nhiên vào Ngân hàng!`, 'success');
+    if (res.generatedCount > 0) {
+      showToast(`Đã bổ sung thêm ${res.generatedCount} câu hỏi mới (đảm bảo không trùng lặp) vào Ngân hàng!`, 'success');
+    } else {
+      showToast('Bạn đã nạp toàn bộ câu hỏi trong kho mẫu có sẵn (chống trùng 100%). Để thêm câu hỏi mới, hãy vào "Ngân Hàng Câu Hỏi" -> chọn tab "Tạo / Nhập Câu Hỏi" để dán danh sách JSON!', 'info');
+    }
   } catch (err: any) {
     showToast(err.message, 'error');
   }
@@ -654,6 +883,19 @@ async function triggerCrowd(count: number) {
   showToast(`Đang giả lập ${count} người xem bình luận đáp án A/B/C/D đồng thời!`, 'success');
 }
 
+async function handleToggleAutoCrowd() {
+  const nextEnabled = !roomState.value?.autoCrowd?.enabled;
+  const res = await api.toggleAutoCrowd(roomCode.value, nextEnabled, 50, 100);
+  if (res.enabled) {
+    showToast(
+      `Đã BẬT chế độ Tự động 50–100 User tự ra/vào phòng và tự động trả lời mọi câu hỏi!`,
+      'success'
+    );
+  } else {
+    showToast('Đã TẮT chế độ Tự động giả lập 50–100 User.', 'info');
+  }
+}
+
 async function testDoubleAnswerCheat() {
   await api.simulateEvent(roomCode.value, {
     type: 'COMMENT',
@@ -699,6 +941,7 @@ async function copyUrl(url: string) {
 }
 
 onMounted(async () => {
+  loadDashSavedCalib();
   await loadDashboardData();
   socket = createRoomSocket(roomCode.value);
 
@@ -708,6 +951,17 @@ onMounted(async () => {
 
   socket.on('tiktok.status', (status) => {
     tiktokStatus.value = status;
+  });
+
+  socket.on('layout.config', (cfg) => {
+    if (!cfg) return;
+    dashLayoutCalib.frameWidth = Number(cfg.frameWidth ?? dashLayoutCalib.frameWidth ?? 362);
+    dashLayoutCalib.frameHeight = Number(cfg.frameHeight ?? dashLayoutCalib.frameHeight ?? 444);
+    dashLayoutCalib.scale = Number(cfg.scale ?? dashLayoutCalib.scale);
+    dashLayoutCalib.widthPercent = Number(cfg.widthPercent ?? dashLayoutCalib.widthPercent);
+    dashLayoutCalib.offsetX = Number(cfg.offsetX ?? dashLayoutCalib.offsetX);
+    dashLayoutCalib.offsetY = Number(cfg.offsetY ?? dashLayoutCalib.offsetY);
+    dashLayoutCalib.preset = String(cfg.preset || dashLayoutCalib.preset);
   });
 });
 

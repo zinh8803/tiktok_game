@@ -19,6 +19,18 @@ import { GameEngineService } from '../game-engine/game-engine.service';
 })
 export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(RealtimeGateway.name);
+  private readonly roomLayoutConfigs = new Map<
+    string,
+    {
+      frameWidth: number;
+      frameHeight: number;
+      scale: number;
+      widthPercent: number;
+      offsetX: number;
+      offsetY: number;
+      preset: string;
+    }
+  >();
 
   @WebSocketServer()
   public server!: Server;
@@ -29,10 +41,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   ) {}
 
   handleConnection(client: Socket) {
-    const roomCode =
+    const roomCode = (
       (client.handshake.query.roomCode as string) ||
       (client.handshake.auth?.roomCode as string) ||
-      'KB2026';
+      'KB2026'
+    ).toUpperCase();
     client.join(roomCode);
     this.logger.debug(`Socket client ${client.id} joined room ${roomCode}`);
 
@@ -53,6 +66,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
         client.emit('game.finished', snapshot.gameFinished);
       }
     }
+    const layoutConfig = this.roomLayoutConfigs.get(roomCode);
+    if (layoutConfig) {
+      client.emit('layout.config', layoutConfig);
+    }
   }
 
   handleDisconnect(client: Socket) {
@@ -64,7 +81,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: { roomCode: string }
   ) {
-    const roomCode = payload?.roomCode || 'KB2026';
+    const roomCode = (payload?.roomCode || 'KB2026').toUpperCase();
     client.join(roomCode);
     const snapshot = this.gameEngine.getFullClientRecoveryState(roomCode);
     if (snapshot) {
@@ -82,7 +99,50 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
         client.emit('game.finished', snapshot.gameFinished);
       }
     }
+    const layoutConfig = this.roomLayoutConfigs.get(roomCode);
+    if (layoutConfig) {
+      client.emit('layout.config', layoutConfig);
+    }
     return { joined: roomCode };
+  }
+
+  @SubscribeMessage('layout.update')
+  handleUpdateLayout(
+    @ConnectedSocket() client: Socket,
+    @MessageBody()
+    payload: {
+      roomCode?: string;
+      frameWidth?: number;
+      frameHeight?: number;
+      scale?: number;
+      widthPercent?: number;
+      offsetX?: number;
+      offsetY?: number;
+      preset?: string;
+    }
+  ) {
+    const roomCode = (payload?.roomCode || 'KB2026').toUpperCase();
+    const current = this.roomLayoutConfigs.get(roomCode) || {
+      frameWidth: 362,
+      frameHeight: 444,
+      scale: 100,
+      widthPercent: 96,
+      offsetX: 0,
+      offsetY: 0,
+      preset: '362x444',
+    };
+    const updated = {
+      frameWidth: Number(payload.frameWidth ?? current.frameWidth),
+      frameHeight: Number(payload.frameHeight ?? current.frameHeight),
+      scale: Number(payload.scale ?? current.scale),
+      widthPercent: Number(payload.widthPercent ?? current.widthPercent),
+      offsetX: Number(payload.offsetX ?? current.offsetX),
+      offsetY: Number(payload.offsetY ?? current.offsetY),
+      preset: payload.preset || current.preset,
+    };
+    this.roomLayoutConfigs.set(roomCode, updated);
+    this.emitToRoom(roomCode, 'layout.config', updated);
+    return { ok: true, config: updated };
   }
 
   public emitToRoom(roomCode: string, event: string, data: any) {

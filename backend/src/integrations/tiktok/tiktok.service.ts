@@ -533,25 +533,60 @@ export class TikTokService {
     return this.eventProcessor.processEvent(event);
   }
 
-  public simulateCrowdWave(roomCode = 'KB2026', count = 8) {
-    const sampleViewers = [
-      { id: 'tt-101', username: 'minhanh_99', nickname: 'Minh Anh 🌸' },
-      { id: 'tt-102', username: 'hoanglong.dev', nickname: 'Hoàng Long ⚡' },
-      { id: 'tt-103', username: 'thao_vy_2k', nickname: 'Thảo Vy 🎀' },
-      { id: 'tt-104', username: 'quocbao_official', nickname: 'Quốc Bảo 🏆' },
-      { id: 'tt-105', username: 'khanhlinh.vn', nickname: 'Khánh Linh ✨' },
-      { id: 'tt-106', username: 'tuankiet_gamer', nickname: 'Tuấn Kiệt 🔥' },
-      { id: 'tt-107', username: 'ngoc_han_live', nickname: 'Ngọc Hân 💎' },
-      { id: 'tt-108', username: 'duykhanh_pro', nickname: 'Duy Khánh 🚀' },
-      { id: 'tt-109', username: 'phuongthao_xinh', nickname: 'Phương Thảo 🍀' },
-      { id: 'tt-110', username: 'gia_huy_88', nickname: 'Gia Huy ⭐' },
-      { id: 'tt-111', username: 'baochau_idol', nickname: 'Bảo Châu 🎵' },
-      { id: 'tt-112', username: 'thanhdat_vn', nickname: 'Thành Đạt 🎯' },
+  private crowdWaveCounter = 0;
+
+  public simulateCrowdWave(roomCode = 'KB2026', count = 20) {
+    this.crowdWaveCounter++;
+    const waveId = this.crowdWaveCounter;
+    const baseViewers = [
+      { username: 'minhanh_99', nickname: 'Minh Anh 🌸' },
+      { username: 'hoanglong.dev', nickname: 'Hoàng Long ⚡' },
+      { username: 'thao_vy_2k', nickname: 'Thảo Vy 🎀' },
+      { username: 'quocbao_official', nickname: 'Quốc Bảo 🏆' },
+      { username: 'khanhlinh.vn', nickname: 'Khánh Linh ✨' },
+      { username: 'tuankiet_gamer', nickname: 'Tuấn Kiệt 🔥' },
+      { username: 'ngoc_han_live', nickname: 'Ngọc Hân 💎' },
+      { username: 'duykhanh_pro', nickname: 'Duy Khánh 🚀' },
+      { username: 'phuongthao_xinh', nickname: 'Phương Thảo 🍀' },
+      { username: 'gia_huy_88', nickname: 'Gia Huy ⭐' },
+      { username: 'baochau_idol', nickname: 'Bảo Châu 🎵' },
+      { username: 'thanhdat_vn', nickname: 'Thành Đạt 🎯' },
+      { username: 'linhchi_cute', nickname: 'Linh Chi 🍓' },
+      { username: 'minhtri_9x', nickname: 'Minh Trí 🦁' },
+      { username: 'haidang_official', nickname: 'Hải Đăng 🌊' },
+      { username: 'anh_tuan_pro', nickname: 'Anh Tuấn ⚡' },
+      { username: 'camtu_tiktok', nickname: 'Cẩm Tú 🌺' },
+      { username: 'duc_manh_vn', nickname: 'Đức Mạnh 🛡️' },
+      { username: 'kieu_oanh_2k2', nickname: 'Kiều Oanh 🦋' },
+      { username: 'quang_vinh_88', nickname: 'Quang Vinh 👑' },
+      { username: 'mai_phuong_bui', nickname: 'Mai Phương 🌷' },
+      { username: '중_hieu_gaming', nickname: 'Trung Hiếu 🎮' },
+      { username: 'yen_nhi_love', nickname: 'Yến Nhi 💖' },
+      { username: 'tuan_anh_dev', nickname: 'Tuấn Anh 💻' },
+      { username: 'thuy_tien_99', nickname: 'Thủy Tiên 🧚' },
+      { username: 'nam_khanh_official', nickname: 'Nam Khánh 🎸' },
+      { username: 'bich_ngoc_xinh', nickname: 'Bích Ngọc 💍' },
+      { username: 'hoai_nam_2k', nickname: 'Hoài Nam 🏎️' },
+      { username: 'thanh_truc_vn', nickname: 'Thanh Trúc 🎋' },
+      { username: 'viet_hoang_pro', nickname: 'Việt Hoàng 🦅' },
     ];
 
+    const totalToSimulate = Math.min(Math.max(Number(count) || 20, 1), 200);
     const options: OptionLabel[] = ['A', 'B', 'C', 'D'];
-    const selectedViewers = sampleViewers.slice(0, Math.min(count, sampleViewers.length));
+    const selectedViewers: Array<{ id: string; username: string; nickname: string }> = [];
 
+    for (let i = 0; i < totalToSimulate; i++) {
+      const base = baseViewers[i % baseViewers.length];
+      const suffix = waveId === 1 && i < baseViewers.length ? '' : ` #${(waveId - 1) * totalToSimulate + i + 1}`;
+      const idNum = (waveId - 1) * 200 + i + 101;
+      selectedViewers.push({
+        id: `tt-sim-${idNum}`,
+        username: `${base.username}_${idNum}`,
+        nickname: `${base.nickname}${suffix}`,
+      });
+    }
+
+    const stepDelayMs = Math.max(15, Math.min(80, Math.floor(2000 / totalToSimulate)));
     const results: any[] = [];
     selectedViewers.forEach((viewer, idx) => {
       const choice = options[Math.floor(Math.random() * options.length)];
@@ -564,7 +599,7 @@ export class TikTokService {
           nickname: viewer.nickname,
           content: choice,
         });
-      }, idx * 140);
+      }, idx * stepDelayMs);
       results.push({ viewer: viewer.nickname, choice });
     });
 

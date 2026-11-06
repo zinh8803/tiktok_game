@@ -10,11 +10,146 @@
     <!-- Phaser 3 Canvas Stage Layer -->
     <div ref="phaserContainer" class="phaser-canvas-layer"></div>
 
+    <!-- Floating Quick Calibrator Toggle (chỉ hiện trên màn hình Game Show độc lập) -->
+    <div v-if="!embedded" class="calib-floating-widget" :class="{ 'calib-open': showCalibPanel }">
+      <button
+        type="button"
+        class="calib-toggle-btn"
+        title="Chỉnh khớp khung hình TikTok Điện thoại"
+        @click="showCalibPanel = !showCalibPanel"
+      >
+        <span>⚙️ {{ showCalibPanel ? 'Đóng chỉnh khung' : 'Chỉnh khớp ĐT' }}</span>
+      </button>
+
+      <div v-if="showCalibPanel" class="calib-popup-card tabular-nums">
+        <div class="calib-popup-header">
+          <strong>🎛️ Khung TikTok ĐT ({{ layoutCalib.frameWidth }}×{{ layoutCalib.frameHeight }})</strong>
+          <button type="button" class="calib-reset-btn" @click="applyCalibPreset('362x444')">
+            Chuẩn 362×444
+          </button>
+        </div>
+
+        <div class="calib-presets-row">
+          <button
+            type="button"
+            class="calib-preset-btn"
+            :class="{ active: layoutCalib.preset === '362x444' }"
+            @click="applyCalibPreset('362x444')"
+          >
+            📱 362×444 (Chuẩn)
+          </button>
+          <button
+            type="button"
+            class="calib-preset-btn"
+            :class="{ active: layoutCalib.preset === 'tiktok-narrow' }"
+            @click="applyCalibPreset('tiktok-narrow')"
+          >
+            📐 Nhỏ gọn (320×400)
+          </button>
+          <button
+            type="button"
+            class="calib-preset-btn"
+            :class="{ active: layoutCalib.preset === 'tiktok-safe-zone' }"
+            @click="applyCalibPreset('tiktok-safe-zone')"
+          >
+            💬 Né chat đáy
+          </button>
+        </div>
+
+        <div class="calib-slider-group">
+          <label>
+            <span>Chiều rộng khung (px)</span>
+            <strong>{{ layoutCalib.frameWidth }}px</strong>
+          </label>
+          <input
+            v-model.number="layoutCalib.frameWidth"
+            type="range"
+            min="260"
+            max="640"
+            step="2"
+            @input="onManualCalibChange"
+          />
+        </div>
+
+        <div class="calib-slider-group">
+          <label>
+            <span>Chiều cao khung (px)</span>
+            <strong>{{ layoutCalib.frameHeight }}px</strong>
+          </label>
+          <input
+            v-model.number="layoutCalib.frameHeight"
+            type="range"
+            min="320"
+            max="840"
+            step="2"
+            @input="onManualCalibChange"
+          />
+        </div>
+
+        <div class="calib-slider-group">
+          <label>
+            <span>Thu phóng cỡ khung (Zoom)</span>
+            <strong>{{ layoutCalib.scale }}%</strong>
+          </label>
+          <input
+            v-model.number="layoutCalib.scale"
+            type="range"
+            min="50"
+            max="130"
+            step="1"
+            @input="onManualCalibChange"
+          />
+        </div>
+
+        <div class="calib-slider-group">
+          <label>
+            <span>Đẩy Lên / Xuống (Tránh chat/avatar)</span>
+            <strong>{{ layoutCalib.offsetY > 0 ? `+${layoutCalib.offsetY}` : layoutCalib.offsetY }}%</strong>
+          </label>
+          <input
+            v-model.number="layoutCalib.offsetY"
+            type="range"
+            min="-35"
+            max="35"
+            step="1"
+            @input="onManualCalibChange"
+          />
+        </div>
+
+        <div class="calib-slider-group">
+          <label>
+            <span>Đẩy Trái / Phải</span>
+            <strong>{{ layoutCalib.offsetX > 0 ? `+${layoutCalib.offsetX}` : layoutCalib.offsetX }}%</strong>
+          </label>
+          <input
+            v-model.number="layoutCalib.offsetX"
+            type="range"
+            min="-30"
+            max="30"
+            step="1"
+            @input="onManualCalibChange"
+          />
+        </div>
+      </div>
+    </div>
+
     <!-- Broadcast Safe Frame Container -->
-    <div class="broadcast-frame">
-      <!-- Top Broadcast Header -->
-      <header class="stage-header">
-        <div class="brand-cluster">
+    <div
+      ref="broadcastFrameRef"
+      class="broadcast-frame"
+      :style="broadcastFrameStyle"
+    >
+      <!-- Top Broadcast Header (Tích hợp thông báo Quà tặng gọn trên thanh Header, không bao giờ che câu hỏi) -->
+      <header class="stage-header" :class="{ 'header-gift-active': !!activeGiftBanner }">
+        <div v-if="activeGiftBanner" class="gift-inline-ticker">
+          <Sparkles :size="14" class="icon-gold" style="flex-shrink: 0;" />
+          <div class="gift-inline-text">
+            <strong>{{ activeGiftBanner.user?.nickname }}</strong>
+            <span>tặng {{ activeGiftBanner.giftName }} ×{{ activeGiftBanner.repeatCount || 1 }}</span>
+            <em v-if="activeGiftBanner.displayMessage">— {{ activeGiftBanner.displayMessage }}</em>
+          </div>
+        </div>
+        <div v-else class="brand-cluster">
           <div class="live-indicator">
             <span class="pulse-dot"></span>
             <span>LIVE</span>
@@ -23,7 +158,7 @@
         </div>
 
         <div class="header-metrics tabular-nums">
-          <div class="metric-pill">
+          <div v-if="!activeGiftBanner" class="metric-pill">
             <Users :size="14" />
             <span>{{ roomState?.playerCount || 0 }} người chơi</span>
           </div>
@@ -32,20 +167,6 @@
           </div>
         </div>
       </header>
-
-      <!-- Gift Animation Overlay Banner (Mục 3.4 & 7.1) -->
-      <transition name="gift-pop">
-        <div v-if="activeGiftBanner" class="gift-banner-overlay">
-          <div class="gift-icon-ring">
-            <Sparkles :size="20" />
-          </div>
-          <div class="gift-banner-text">
-            <strong>{{ activeGiftBanner.user?.nickname }}</strong>
-            <span>{{ activeGiftBanner.displayMessage }}</span>
-          </div>
-          <span class="gift-tag">{{ activeGiftBanner.giftName }} ×{{ activeGiftBanner.repeatCount || 1 }}</span>
-        </div>
-      </transition>
 
       <!-- Main Stage Content Grid -->
       <main class="stage-grid">
@@ -151,16 +272,7 @@
               <p class="question-text">{{ activeQuestion.question }}</p>
               <div class="answered-counter tabular-nums">
                 <MessageSquare :size="14" />
-                <span>{{ answeredCount }} người đã chốt đáp án</span>
-              </div>
-              <div v-if="answeredPlayers.length" class="player-chips" style="margin-top: 0.4vh;">
-                <span
-                  v-for="plr in answeredPlayers.slice(0, 12)"
-                  :key="plr.playerId"
-                  class="player-chip"
-                >
-                  ✓ {{ plr.nickname }}
-                </span>
+                <span>{{ answeredCount }} người đã chọn đáp án</span>
               </div>
             </div>
 
@@ -224,33 +336,6 @@
               <div class="explanation-content">
                 <h3>Giải thích đáp án {{ questionResult.correctOption }}</h3>
                 <p>{{ questionResult.explanation }}</p>
-              </div>
-
-              <div
-                v-if="questionResult.allAnswers?.length || questionResult.fastestPlayers?.length"
-                class="fastest-box"
-              >
-                <h4>Kết quả người trả lời ({{ questionResult.totalAnswersCount || 0 }})</h4>
-                <div class="fastest-list tabular-nums">
-                  <div
-                    v-for="(fp, idx) in (questionResult.allAnswers || questionResult.fastestPlayers).slice(0, 8)"
-                    :key="idx"
-                    class="fastest-item"
-                  >
-                    <span class="fastest-name">
-                      {{ fp.nickname }}
-                      <strong v-if="fp.selectedOption" style="color: var(--accent-cyan);">
-                        [{{ fp.selectedOption }}]
-                      </strong>
-                    </span>
-                    <span
-                      class="fastest-pts"
-                      :style="{ color: fp.points > 0 ? '#6ee7b7' : '#fda4af' }"
-                    >
-                      {{ fp.points > 0 ? `+${fp.points}đ` : '0đ' }}
-                    </span>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -394,9 +479,160 @@ const isVerticalLayout = ref(
 );
 
 const phaserContainer = ref<HTMLElement | null>(null);
+const broadcastFrameRef = ref<HTMLElement | null>(null);
 const stageCardRef = ref<HTMLElement | null>(null);
 let phaserStage: PhaserStageController | null = null;
 let socket: Socket | null = null;
+let frameResizeObserver: ResizeObserver | null = null;
+
+const showCalibPanel = ref(false);
+const autoFitScale = ref(1);
+const layoutCalib = ref({
+  frameWidth: Number(route.query.fw) || 362,
+  frameHeight: Number(route.query.fh) || 444,
+  scale: Number(route.query.scale) || 100,
+  widthPercent: Number(route.query.w) || 96,
+  offsetX: Number(route.query.ox) || 0,
+  offsetY: Number(route.query.oy) || 0,
+  preset: String(route.query.preset || '362x444'),
+});
+
+const STORAGE_CALIB_KEY = 'kb_vertical_layout_362x444_v3';
+
+function loadSavedCalib() {
+  if (typeof window === 'undefined') return;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_CALIB_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      layoutCalib.value = {
+        frameWidth: Number(route.query.fw) || Number(parsed.frameWidth ?? 362),
+        frameHeight: Number(route.query.fh) || Number(parsed.frameHeight ?? 444),
+        scale: Number(route.query.scale) || Number(parsed.scale ?? 100),
+        widthPercent: Number(route.query.w) || Number(parsed.widthPercent ?? 96),
+        offsetX: Number(route.query.ox) || Number(parsed.offsetX ?? 0),
+        offsetY: Number(route.query.oy) || Number(parsed.offsetY ?? 0),
+        preset: String(route.query.preset || parsed.preset || '362x444'),
+      };
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function saveAndBroadcastCalib() {
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(STORAGE_CALIB_KEY, JSON.stringify(layoutCalib.value));
+    } catch {
+      // ignore
+    }
+  }
+  socket?.emit('layout.update', {
+    roomCode: roomCode.value,
+    ...layoutCalib.value,
+  });
+  requestAnimationFrame(recalcAutoFit);
+}
+
+function applyCalibPreset(preset: '362x444' | 'tiktok-narrow' | 'tiktok-safe-zone') {
+  if (preset === '362x444') {
+    layoutCalib.value = {
+      frameWidth: 362,
+      frameHeight: 444,
+      scale: 100,
+      widthPercent: 96,
+      offsetX: 0,
+      offsetY: 0,
+      preset: '362x444',
+    };
+  } else if (preset === 'tiktok-narrow') {
+    layoutCalib.value = {
+      frameWidth: 320,
+      frameHeight: 400,
+      scale: 100,
+      widthPercent: 90,
+      offsetX: 0,
+      offsetY: 0,
+      preset: 'tiktok-narrow',
+    };
+  } else if (preset === 'tiktok-safe-zone') {
+    layoutCalib.value = {
+      frameWidth: 362,
+      frameHeight: 444,
+      scale: 96,
+      widthPercent: 96,
+      offsetX: 0,
+      offsetY: -8,
+      preset: 'tiktok-safe-zone',
+    };
+  }
+  saveAndBroadcastCalib();
+}
+
+function onManualCalibChange() {
+  layoutCalib.value.preset = 'custom';
+  saveAndBroadcastCalib();
+}
+
+function recalcAutoFit() {
+  if (props.embedded || !broadcastFrameRef.value || typeof window === 'undefined') {
+    autoFitScale.value = 1;
+    return;
+  }
+  const el = broadcastFrameRef.value;
+  const naturalHeight = el.scrollHeight || el.offsetHeight || 1;
+  const targetH = isVerticalLayout.value
+    ? Math.min(layoutCalib.value.frameHeight || 444, window.innerHeight * 0.96)
+    : window.innerHeight * 0.94;
+  if (naturalHeight > targetH && targetH > 120) {
+    autoFitScale.value = Math.max(0.55, Math.min(1, targetH / naturalHeight));
+  } else {
+    autoFitScale.value = 1;
+  }
+}
+
+const broadcastFrameStyle = computed(() => {
+  if (props.embedded) return {};
+  if (!isVerticalLayout.value) {
+    const s = (layoutCalib.value.scale / 100) * autoFitScale.value;
+    if (s === 1 && !layoutCalib.value.offsetX && !layoutCalib.value.offsetY) return {};
+    return {
+      transform: `translate(${layoutCalib.value.offsetX}vw, ${layoutCalib.value.offsetY}vh) scale(${s.toFixed(3)})`,
+      transformOrigin: 'center center',
+    };
+  }
+  const effectiveScale = (layoutCalib.value.scale / 100) * autoFitScale.value;
+  const fw = layoutCalib.value.frameWidth || 362;
+  const fh = layoutCalib.value.frameHeight || 444;
+  return {
+    width: `${fw}px`,
+    maxWidth: '98vw',
+    maxHeight: `${fh}px`,
+    transform: `translate(${layoutCalib.value.offsetX}vw, ${layoutCalib.value.offsetY}vh) scale(${effectiveScale.toFixed(3)})`,
+    transformOrigin: 'center center',
+  };
+});
+
+function handleStorageSync(e: StorageEvent) {
+  if (e.key === STORAGE_CALIB_KEY && e.newValue) {
+    try {
+      const parsed = JSON.parse(e.newValue);
+      layoutCalib.value = {
+        frameWidth: Number(parsed.frameWidth ?? 362),
+        frameHeight: Number(parsed.frameHeight ?? 444),
+        scale: Number(parsed.scale ?? 100),
+        widthPercent: Number(parsed.widthPercent ?? 96),
+        offsetX: Number(parsed.offsetX ?? 0),
+        offsetY: Number(parsed.offsetY ?? 0),
+        preset: String(parsed.preset || 'custom'),
+      };
+      requestAnimationFrame(recalcAutoFit);
+    } catch {
+      // ignore
+    }
+  }
+}
 
 const roomState = ref<any>(null);
 const activeQuestion = ref<any>(null);
@@ -460,6 +696,7 @@ watch(currentPhase, (newPhase) => {
     phaserStage?.triggerConfetti();
     phaserStage?.triggerFireworks(4);
   }
+  requestAnimationFrame(recalcAutoFit);
 });
 
 watch(remainingSeconds, (sec) => {
@@ -472,14 +709,17 @@ function handleResize() {
   if (props.embedded) return;
   if (route.query.layout === 'vertical') {
     isVerticalLayout.value = true;
+    requestAnimationFrame(recalcAutoFit);
     return;
   }
   if (route.query.layout === 'landscape') {
     isVerticalLayout.value = false;
+    requestAnimationFrame(recalcAutoFit);
     return;
   }
   isVerticalLayout.value =
     window.innerWidth <= 960 || window.innerHeight >= window.innerWidth * 0.85;
+  requestAnimationFrame(recalcAutoFit);
 }
 
 async function loadInitialRecovery() {
@@ -508,8 +748,17 @@ async function loadInitialRecovery() {
 }
 
 onMounted(async () => {
+  loadSavedCalib();
   window.addEventListener('resize', handleResize);
+  window.addEventListener('storage', handleStorageSync);
   handleResize();
+
+  if (typeof ResizeObserver !== 'undefined' && broadcastFrameRef.value) {
+    frameResizeObserver = new ResizeObserver(() => {
+      recalcAutoFit();
+    });
+    frameResizeObserver.observe(broadcastFrameRef.value);
+  }
 
   if (phaserContainer.value) {
     phaserStage = new PhaserStageController();
@@ -517,6 +766,7 @@ onMounted(async () => {
   }
 
   await loadInitialRecovery();
+  requestAnimationFrame(recalcAutoFit);
 
   socket = createRoomSocket(roomCode.value);
 
@@ -529,6 +779,7 @@ onMounted(async () => {
     if (payload.answeredPlayersCurrentQuestion) {
       answeredPlayers.value = payload.answeredPlayersCurrentQuestion;
     }
+    requestAnimationFrame(recalcAutoFit);
   });
 
   socket.on('question.started', (payload) => {
@@ -537,6 +788,7 @@ onMounted(async () => {
     remainingSeconds.value = payload.duration || 15;
     answeredCount.value = 0;
     answeredPlayers.value = [];
+    requestAnimationFrame(recalcAutoFit);
   });
 
   socket.on('question.timer', (payload) => {
@@ -548,20 +800,45 @@ onMounted(async () => {
     if (payload.answeredPlayers) {
       answeredPlayers.value = payload.answeredPlayers;
     }
+    requestAnimationFrame(recalcAutoFit);
   });
 
   socket.on('question.result', (payload) => {
     questionResult.value = payload;
+    requestAnimationFrame(recalcAutoFit);
   });
 
   socket.on('leaderboard.updated', (payload) => {
     leaderboard.value = payload.leaderboard || [];
+    requestAnimationFrame(recalcAutoFit);
   });
 
   socket.on('game.finished', (payload) => {
     if (payload.leaderboard) {
       leaderboard.value = payload.leaderboard;
     }
+    requestAnimationFrame(recalcAutoFit);
+  });
+
+  socket.on('layout.config', (cfg) => {
+    if (!cfg) return;
+    layoutCalib.value = {
+      frameWidth: Number(cfg.frameWidth ?? layoutCalib.value.frameWidth ?? 362),
+      frameHeight: Number(cfg.frameHeight ?? layoutCalib.value.frameHeight ?? 444),
+      scale: Number(cfg.scale ?? layoutCalib.value.scale),
+      widthPercent: Number(cfg.widthPercent ?? layoutCalib.value.widthPercent),
+      offsetX: Number(cfg.offsetX ?? layoutCalib.value.offsetX),
+      offsetY: Number(cfg.offsetY ?? layoutCalib.value.offsetY),
+      preset: String(cfg.preset || layoutCalib.value.preset),
+    };
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(STORAGE_CALIB_KEY, JSON.stringify(layoutCalib.value));
+      } catch {
+        // ignore
+      }
+    }
+    requestAnimationFrame(recalcAutoFit);
   });
 
   socket.on('activity.feed', (entry) => {
@@ -580,6 +857,8 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize);
+  window.removeEventListener('storage', handleStorageSync);
+  frameResizeObserver?.disconnect();
   if (giftTimeout) clearTimeout(giftTimeout);
   socket?.disconnect();
   phaserStage?.destroy();
@@ -589,7 +868,6 @@ onBeforeUnmount(() => {
 <style scoped>
 /* ===================================================================
    KHUNG CHUẨN BROADCAST — TỰ ĐỘNG KHỚP MỌI KHUNG HÌNH OBS / TIKTOK STUDIO
-   (Kể cả khi Browser Source đang để 800x600, 1920x1080 hay 1080x1920)
    =================================================================== */
 .gameshow-root {
   position: relative;
@@ -601,7 +879,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2vh 2vw;
+  padding: 0.5rem;
 }
 
 .gameshow-root.is-embedded {
@@ -622,29 +900,270 @@ onBeforeUnmount(() => {
   z-index: 2;
   width: 100%;
   max-width: 1360px;
-  max-height: 96vh;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 1.4vh;
+  gap: 1.2vh;
+  transition: width 0.15s ease, transform 0.15s ease;
 }
 
 /*
- * Chế độ Dọc TikTok LIVE (9:16):
- * Dùng min(92vw, 49vh) để dù OBS/TikTok LIVE Studio để Browser Source mặc định 800x600,
- * 1920x1080 hay 1080x1920 thì toàn bộ khung game vẫn nằm gọn 100% ở vùng giữa màn hình dọc!
+ * Chế độ Dọc TikTok LIVE (Chuẩn 362 × 444 px theo khung điện thoại):
+ * Khung game gọn đúng 362x444px, căn giữa màn hình, không bị tràn mép!
  */
 .layout-vertical .broadcast-frame {
-  width: min(92vw, 49vh);
-  max-width: 100%;
-  max-height: 94vh;
-  gap: 1.2vh;
+  width: 362px;
+  max-width: 98vw;
+  max-height: 444px;
+  gap: 6px;
+}
+
+.layout-vertical .stage-header {
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+
+.layout-vertical .stage-title {
+  font-size: 12px;
+}
+
+.layout-vertical .live-indicator {
+  font-size: 9px;
+  padding: 2px 6px;
+}
+
+.layout-vertical .metric-pill {
+  font-size: 10px;
+  padding: 2px 7px;
+}
+
+.layout-vertical .stage-grid {
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.layout-vertical .center-stage-area {
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+
+.layout-vertical .waiting-screen {
+  gap: 7px;
+}
+
+.layout-vertical .trophy-emblem {
+  width: 34px;
+  height: 34px;
+  margin-bottom: 2px;
+}
+
+.layout-vertical .waiting-headline {
+  font-size: 16px;
+}
+
+.layout-vertical .waiting-subtext {
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.layout-vertical .rules-strip {
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+.layout-vertical .rule-item {
+  padding: 5px 8px;
+  border-radius: 7px;
+  gap: 8px;
+}
+
+.layout-vertical .rule-item strong {
+  font-size: 11px;
+}
+
+.layout-vertical .rule-item p {
+  font-size: 10px;
+}
+
+.layout-vertical .waiting-players-box {
+  padding: 6px 9px;
+  border-radius: 7px;
+}
+
+.layout-vertical .waiting-players-header {
+  font-size: 10.5px;
+  margin-bottom: 3px;
+}
+
+.layout-vertical .empty-players-hint {
+  font-size: 10px;
+}
+
+.layout-vertical .question-screen,
+.layout-vertical .reveal-screen {
+  gap: 6px;
+}
+
+.layout-vertical .question-prompt-box {
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+
+.layout-vertical .question-text {
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.layout-vertical .options-grid {
+  grid-template-columns: 1fr;
+  gap: 5px;
+}
+
+.layout-vertical .option-card {
+  padding: 5px 8px;
+  border-radius: 7px;
+  gap: 7px;
+}
+
+.layout-vertical .option-key {
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+}
+
+.layout-vertical .option-text {
+  font-size: 12px;
+}
+
+.layout-vertical .sidebar-card {
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+
+.layout-vertical .sidebar-header {
+  margin-bottom: 4px;
+}
+
+.layout-vertical .sidebar-header h3 {
+  font-size: 11px;
+}
+
+.layout-vertical .sidebar-empty {
+  font-size: 10px;
 }
 
 .gameshow-root.is-embedded .broadcast-frame {
   width: 100%;
   max-height: 100%;
+}
+
+/* Floating Quick Calibrator Widget */
+.calib-floating-widget {
+  position: fixed;
+  top: 0.6rem;
+  right: 0.6rem;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.45rem;
+}
+
+.calib-toggle-btn {
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(13, 17, 39, 0.75);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  color: #e2f1ff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  opacity: 0.32;
+  transition: opacity 0.2s ease, background 0.2s ease;
+}
+
+.calib-floating-widget:hover .calib-toggle-btn,
+.calib-floating-widget.calib-open .calib-toggle-btn {
+  opacity: 1;
+  background: rgba(13, 17, 39, 0.96);
+}
+
+.calib-popup-card {
+  width: min(310px, 90vw);
+  padding: 0.85rem;
+  border-radius: 0.85rem;
+  background: rgba(10, 14, 34, 0.96);
+  border: 1px solid rgba(0, 240, 255, 0.45);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.7);
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.calib-popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.78rem;
+  color: var(--accent-cyan);
+}
+
+.calib-reset-btn {
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.4rem;
+  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.calib-presets-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.35rem;
+}
+
+.calib-preset-btn {
+  padding: 0.35rem 0.3rem;
+  border-radius: 0.45rem;
+  border: 1px solid var(--border-subtle);
+  background: rgba(24, 30, 64, 0.8);
+  color: #dbeafe;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+}
+
+.calib-preset-btn.active {
+  border-color: var(--accent-cyan);
+  background: rgba(0, 240, 255, 0.18);
+  color: #fff;
+}
+
+.calib-slider-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.calib-slider-group label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.calib-slider-group label strong {
+  color: var(--accent-gold);
+}
+
+.calib-slider-group input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent-cyan);
+  cursor: pointer;
 }
 
 /* Header gọn gàng 1 dòng, không bao giờ tràn chữ */
@@ -1076,16 +1595,25 @@ onBeforeUnmount(() => {
 
 .explanation-box {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.75rem;
-  padding: 0.75rem 0.9rem;
-  border-radius: 0.75rem;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.65rem;
   background: rgba(10, 15, 35, 0.88);
   border: 1px solid rgba(16, 185, 129, 0.35);
 }
 
 .layout-vertical .explanation-box {
-  grid-template-columns: 1fr;
+  padding: 6px 9px;
+}
+
+.layout-vertical .explanation-content h3 {
+  font-size: 11.5px;
+}
+
+.layout-vertical .explanation-content p {
+  font-size: 11px;
+  line-height: 1.25;
 }
 
 .explanation-content h3 {
@@ -1369,55 +1897,51 @@ onBeforeUnmount(() => {
   color: var(--text-muted);
 }
 
-/* Gift Banner */
-.gift-banner-overlay {
-  position: fixed;
-  top: 3.5rem;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  padding: 0.6rem 1rem;
-  border-radius: 999px;
-  background: rgba(21, 13, 48, 0.96);
-  border: 2px solid var(--accent-gold);
-  box-shadow: 0 12px 30px -6px rgba(250, 204, 21, 0.45);
-  max-width: 92vw;
+/* Gift Inline Header Ticker (không che câu hỏi, không làm nhảy khung) */
+.stage-header.header-gift-active {
+  background: linear-gradient(90deg, rgba(45, 27, 10, 0.95) 0%, rgba(21, 16, 48, 0.95) 100%);
+  border-color: var(--accent-gold);
+  box-shadow: 0 0 14px rgba(250, 204, 21, 0.35);
 }
 
-.gift-icon-ring {
-  width: 34px;
-  height: 34px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  background: rgba(250, 204, 21, 0.2);
-  color: var(--accent-gold);
+.gift-inline-ticker {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 0.4rem;
+  min-width: 0;
+  flex: 1;
 }
 
-.gift-banner-text {
+.gift-inline-text {
   display: flex;
-  flex-direction: column;
-  font-size: 0.8rem;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: clamp(10px, 1.7vh, 14px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   min-width: 0;
 }
 
-.gift-banner-text strong {
-  color: var(--accent-gold);
+.layout-vertical .gift-inline-text {
+  font-size: 11px;
 }
 
-.gift-tag {
-  padding: 0.2rem 0.55rem;
-  border-radius: 999px;
-  background: var(--accent-gold);
-  color: #090a10;
+.gift-inline-text strong {
+  color: var(--accent-gold);
   font-weight: 800;
-  font-size: 0.74rem;
-  white-space: nowrap;
+}
+
+.gift-inline-text span {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.gift-inline-text em {
+  font-style: normal;
+  color: #fde68a;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .icon-cyan {

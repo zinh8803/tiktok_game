@@ -151,6 +151,19 @@ export class ApiController {
     return this.tiktokService.simulateCrowdWave(roomCode, body?.count || 8);
   }
 
+  @Post('simulator/:roomCode/auto-crowd')
+  toggleAutoCrowd(
+    @Param('roomCode') roomCode: string,
+    @Body() body?: { enabled?: boolean; minPlayers?: number; maxPlayers?: number }
+  ) {
+    return this.gameEngine.toggleAutoCrowd(
+      roomCode,
+      body?.enabled,
+      body?.minPlayers ?? 50,
+      body?.maxPlayers ?? 100
+    );
+  }
+
   // =====================================================================
   // QUESTION BANK, CATEGORIES, REVIEWS & GIFT MAPPINGS (Mục 4 & Mục 9)
   // =====================================================================

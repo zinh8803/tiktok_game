@@ -66,6 +66,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ count }),
     }),
+  toggleAutoCrowd: (
+    roomCode = 'KB2026',
+    enabled?: boolean,
+    minPlayers = 50,
+    maxPlayers = 100
+  ) =>
+    request<any>(`/simulator/${roomCode}/auto-crowd`, {
+      method: 'POST',
+      body: JSON.stringify({ enabled, minPlayers, maxPlayers }),
+    }),
 
   // Question Bank & Admin
   getCategories: () => request<any[]>('/categories'),

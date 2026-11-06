@@ -567,7 +567,11 @@ async function handleGenerateRandom(count = 10, targetStatus = 'PUBLISHED') {
   isGeneratingRandom.value = true;
   try {
     const res = await api.generateRandomQuestions(count, targetStatus);
-    statusNotice.value = `Đã tự động thêm ${res.generatedCount} câu hỏi ngẫu nhiên mới vào Ngân hàng câu hỏi!`;
+    if (res.generatedCount > 0) {
+      statusNotice.value = `Đã tự động thêm ${res.generatedCount} câu hỏi mới (chống trùng lặp 100%) vào Ngân hàng câu hỏi!`;
+    } else {
+      statusNotice.value = `Toàn bộ câu hỏi trong kho mẫu có sẵn đã được nạp hết vào ngân hàng. Để bổ sung thêm câu hỏi mới, bạn hãy dùng tab "Tạo / Nhập Câu Hỏi" bên dưới!`;
+    }
     await loadAllAdminData();
     activeTab.value = 'questions';
   } catch (err: any) {

@@ -922,7 +922,7 @@ export class DatabaseService implements OnModuleInit {
       },
     ];
 
-    // Bổ sung bộ sinh câu hỏi đố nhanh ngẫu nhiên không giới hạn (Địa danh - Đặc sản / Toán đố nhanh / Khoa học)
+    // Bổ sung các danh lam thắng cảnh & đặc sản 63 tỉnh thành Việt Nam
     const provinceSpecialties = [
       { province: 'Bến Tre', trait: 'Xứ Dừa và Kẹo dừa', wrongs: ['Xứ Nhãn lồng', 'Xứ Vải thiều', 'Xứ Chè Tân Cương'] },
       { province: 'Thái Nguyên', trait: 'Đệ nhất danh trà (Chè Tân Cương)', wrongs: ['Kẹo cu đơ', 'Mè xửng', 'Bánh pía'] },
@@ -932,48 +932,175 @@ export class DatabaseService implements OnModuleInit {
       { province: 'Tây Ninh', trait: 'Bánh tráng phơi sương & Muối tôm', wrongs: ['Bún cá Nha Trang', 'Mì Quảng', 'Cao lầu Hội An'] },
       { province: 'Quảng Nam', trait: 'Mì Quảng và Cao lầu Hội An', wrongs: ['Bún chả Hà Nội', 'Bánh đa cua Hải Phòng', 'Hủ tiếu Mỹ Tho'] },
       { province: 'Hải Phòng', trait: 'Bánh đa cua và Hoa phượng đỏ', wrongs: ['Cơm hến', 'Bún mắm', 'Phở khô hai tô'] },
+      { province: 'An Giang', trait: 'Miếu Bà Chúa Xứ Núi Sam & Rừng tràm Trà Sư', wrongs: ['Chợ nổi Cái Răng', 'Cồn Phụng', 'Chùa Dơi'] },
+      { province: 'Kiên Giang', trait: 'Đảo ngọc Phú Quốc & Quần đảo Nam Du', wrongs: ['Cù lao Ré', 'Hòn Khô', 'Bình Ba'] },
+      { province: 'Lâm Đồng', trait: 'Thành phố ngàn hoa Đà Lạt & Hồ Xuân Hương', wrongs: ['Bà Nà Hills', 'Fansipan', 'Tràng An'] },
+      { province: 'Thừa Thiên Huế', trait: 'Cố đô Huế, Sông Hương & Chùa Thiên Mụ', wrongs: ['Phố cổ Hội An', 'Cố đô Hoa Lư', 'Hoàng thành Thăng Long'] },
+      { province: 'Ninh Bình', trait: 'Quần thể danh thắng Tràng An & Tam Cốc Bích Động', wrongs: ['Động Phong Nha', 'Vịnh Lan Hạ', 'Đảo Cát Bà'] },
+      { province: 'Phú Yên', trait: 'Gành Đá Đĩa độc đáo & Xứ hoa vàng trên cỏ xanh', wrongs: ['Mũi Né', 'Kỳ Co', 'Gành Son'] },
+      { province: 'Đắk Lắk', trait: 'Thủ phủ cà phê Buôn Ma Thuột & Hồ Lắk', wrongs: ['Hồ Tơ Nưng', 'Núi Langbiang', 'Thác Datanla'] },
+      { province: 'Bình Định', trait: 'Miền đất võ Tây Sơn & Bánh ít lá gai', wrongs: ['Bánh đậu xanh', 'Nem nướng Ninh Hòa', 'Kẹo sìu dâu'] },
+      { province: 'Cà Mau', trait: 'Mũi Cà Mau — Cực Nam Tổ quốc & Rừng U Minh Hạ', wrongs: ['Mũi Sa Vĩ', 'Mũi Điện', 'Đèo Hải Vân'] },
+      { province: 'Quảng Bình', trait: 'Vườn quốc gia Phong Nha - Kẻ Bàng & Hang Sơn Đoòng', wrongs: ['Động Hương Tích', 'Hang Đầu Gỗ', 'Động Ngườm Ngao'] },
+      { province: 'Khánh Hòa', trait: 'Thành phố biển Nha Trang & Đảo Yến Hòn Nội', wrongs: ['Bãi Dài Phú Quốc', 'Biển Cửa Lò', 'Bãi Cháy'] },
+      { province: 'Bà Rịa - Vũng Tàu', trait: 'Tượng Chúa Kytô Vua Núi Nhỏ & Bãi Trước, Bãi Sau', wrongs: ['Bán đảo Sơn Trà', 'Mũi Kê Gà', 'Hòn Rơm'] },
+      { province: 'Đồng Tháp', trait: 'Xứ sở Sen hồng & Vườn quốc gia Tràm Chim', wrongs: ['Rừng U Minh Thượng', 'Vườn quốc gia Cúc Phương', 'Vườn quốc gia Cát Tiên'] },
+      { province: 'Bắc Giang', trait: 'Vùng đất Vải thiều Lục Ngạn nức tiếng', wrongs: ['Vải thiều Thanh Hà', 'Xoài cát Hòa Lộc', 'Bưởi Năm Roi'] },
+      { province: 'Hải Dương', trait: 'Đặc sản Bánh đậu xanh truyền thống thơm bùi', wrongs: ['Kẹo mè xửng', 'Kẹo cu đơ', 'Bánh cốm Hà Nội'] },
+      { province: 'Hà Tĩnh', trait: 'Kẹo cu đơ Hà Tĩnh & Khu di tích Ngã ba Đồng Lộc', wrongs: ['Bánh cáy', 'Bánh gai', 'Bánh pía'] },
+      { province: 'Nghệ An', trait: 'Làng Sen quê Bác & Bãi biển Cửa Lò', wrongs: ['Làng gốm Bát Tràng', 'Làng lụa Vạn Phúc', 'Làng đá Non Nước'] },
+      { province: 'Thanh Hóa', trait: 'Di sản thế giới Thành nhà Hồ & Nem chua Thanh Hóa', wrongs: ['Kinh thành Huế', 'Hoàng thành Thăng Long', 'Thành Cổ Loa'] },
+      { province: 'Cao Bằng', trait: 'Thác Bản Giốc hùng vĩ trên biên giới', wrongs: ['Thác Dambri', 'Thác Pongour', 'Thác Datanla'] },
+      { province: 'Bắc Kạn', trait: 'Hồ Ba Bể — Hồ nước ngọt tự nhiên lớn nhất miền Bắc', wrongs: ['Hồ Tây', 'Hồ Núi Cốc', 'Hồ Thác Bà'] },
+      { province: 'Điện Biên', trait: 'Chiến trường Điện Biên Phủ "Lừng lẫy năm châu" (1954)', wrongs: ['Chiến dịch Việt Bắc', 'Chiến dịch Biên giới', 'Chiến dịch Tây Nguyên'] },
+      { province: 'Yên Bái', trait: 'Di tích quốc gia Ruộng bậc thang Mù Cang Chải', wrongs: ['Ruộng bậc thang Hoàng Su Phì', 'Sa Pa', 'Pù Luông'] },
     ];
 
     for (const item of provinceSpecialties) {
       curatedRandomPool.push({
-        categoryId: 'cat-life',
-        content: `Khi nhắc đến tỉnh/thành phố ${item.province}, đâu là đặc sản hoặc biểu tượng nổi tiếng nhất gắn liền với vùng đất này?`,
+        categoryId: 'cat-geo',
+        content: `Khi nhắc đến tỉnh/thành phố ${item.province}, đâu là đặc sản hoặc danh lam biểu tượng nổi tiếng nhất?`,
         difficulty: 'EASY',
         correctAnswer: item.trait,
         wrongAnswers: item.wrongs as [string, string, string],
-        explanation: `${item.province} nổi tiếng khắp cả nước với đặc sản và biểu tượng: ${item.trait}.`,
-        topicTags: ['Đặc sản vùng miền', item.province],
+        explanation: `${item.province} nổi tiếng cả nước với biểu tượng / đặc sản: ${item.trait}.`,
+        topicTags: ['Địa lý Việt Nam', item.province],
         sourceType: 'WIKIPEDIA',
-        attribution: `Wikipedia Tiếng Việt - Văn hóa ẩm thực ${item.province}`,
+        attribution: `Wikipedia Tiếng Việt - Văn hóa & Địa danh ${item.province}`,
       });
     }
 
-    // Lọc các câu chưa từng có trong DB
+    // Bổ sung kho câu hỏi đố vui dân gian & ca dao tục ngữ (hoàn toàn phi tính toán)
+    const folkTriviaPool = [
+      {
+        content: 'Đố vui mẹo: "Con gì đập thì sống, không đập thì chết?"',
+        correct: 'Con tim',
+        wrongs: ['Con muỗi', 'Con ruồi', 'Con rắn'],
+        exp: 'Quả tim đập liên tục để duy trì sự sống, tim ngừng đập nghĩa là chết.',
+        cat: 'cat-life',
+      },
+      {
+        content: 'Đố vui: "Cái gì đen khi mua, đỏ khi dùng và xám xịt khi vứt đi?"',
+        correct: 'Than củi',
+        wrongs: ['Chiếc lốp xe', 'Bao diêm', 'Nồi gang'],
+        exp: 'Than củi lúc mua có màu đen, khi đốt cháy đỏ rực, sau khi tàn chỉ còn tro xám.',
+        cat: 'cat-life',
+      },
+      {
+        content: 'Đố vui: "Hoa gì không có cành, không có lá mà nở rực rỡ nhất trong đêm Giao thừa?"',
+        correct: 'Hoa pháo bông (Pháo hoa)',
+        wrongs: ['Hoa mai vàng', 'Hoa đào đỏ', 'Hoa quỳnh trắng'],
+        exp: 'Pháo hoa bung nở rực rỡ trên bầu trời đêm Giao thừa mừng năm mới.',
+        cat: 'cat-life',
+      },
+      {
+        content: 'Đố vui: "Con gì sinh ra đã được mang quân hàm, đi đâu cũng được gọi là tướng?"',
+        correct: 'Con cờ Tướng',
+        wrongs: ['Con cua biển', 'Con chuồn chuồn', 'Con tôm hùm'],
+        exp: 'Trong bàn cờ tướng, quân Tướng sinh ra đã mang tên là Tướng.',
+        cat: 'cat-life',
+      },
+      {
+        content: 'Đố vui: "Cây gì không cành không lá, người đi qua lại phải đứng nhìn chờ nở hoa?"',
+        correct: 'Cột đèn giao thông',
+        wrongs: ['Cây cột điện', 'Cây nêu ngày Tết', 'Cây cột cờ'],
+        exp: 'Cột đèn giao thông bật đèn đỏ/xanh/vàng báo hiệu cho người tham gia giao thông.',
+        cat: 'cat-life',
+      },
+      {
+        content: 'Đố vui: "Cái gì chứa nhiều biển, nhiều sông, nhiều núi nhưng không hề có giọt nước hay hòn đá nào?"',
+        correct: 'Tấm bản đồ',
+        wrongs: ['Cuốn từ điển', 'Quả địa cầu rỗng', 'Bức tranh phong cảnh'],
+        exp: 'Bản đồ vẽ tất cả sông núi biển cả trên giấy nhưng không chứa nước thật.',
+        cat: 'cat-life',
+      },
+      {
+        content: 'Đố vui: "Con gì có thể cuốn trôi cả thân cây cổ thụ nhưng lại không nhấc nổi hòn sỏi nhỏ?"',
+        correct: 'Dòng sông',
+        wrongs: ['Con gió bão', 'Con sóng biển', 'Con trâu mộng'],
+        exp: 'Dòng sông cuồn cuộn cuốn trôi cây gỗ trôi nổi, nhưng sỏi đá chìm dưới đáy sông không nâng nổi.',
+        cat: 'cat-life',
+      },
+      {
+        content: 'Hoàn thành câu tục ngữ: "Bán anh em xa, mua..." gì?',
+        correct: 'Láng giềng gần',
+        wrongs: ['Bạn bè thân', 'Tình làng nghĩa xóm', 'Người quen cũ'],
+        exp: 'Tục ngữ "Bán anh em xa, mua láng giềng gần" khuyên giữ gìn quan hệ tốt đẹp với hàng xóm.',
+        cat: 'cat-his',
+      },
+      {
+        content: 'Hoàn thành câu ca dao: "Bầu ơi thương lấy bí cùng, tuy rằng khác giống nhưng..." gì?',
+        correct: 'Chung một giàn',
+        wrongs: ['Cùng một mâm', 'Chung một nhà', 'Chung một lòng'],
+        exp: 'Ca dao nhắc nhở tinh thần đoàn kết, tương thân tương ái giữa đồng bào.',
+        cat: 'cat-his',
+      },
+      {
+        content: 'Hoàn thành câu ca dao: "Nhiễu điều phủ lấy giá gương, người trong một nước phải..." gì?',
+        correct: 'Thương nhau cùng',
+        wrongs: ['Giúp nhau cùng', 'Yêu nhau cùng', 'Bảo bọc nhau'],
+        exp: 'Câu ca dao dạy về lòng nhân ái, tình đoàn kết yêu thương đồng bào.',
+        cat: 'cat-his',
+      },
+      {
+        content: 'Đố kiến thức: Kim loại duy nhất tồn tại ở thể lỏng trong điều kiện nhiệt độ phòng là gì?',
+        correct: 'Thủy ngân (Hg)',
+        wrongs: ['Chì (Pb)', 'Nhôm (Al)', 'Thiếc (Sn)'],
+        exp: 'Thủy ngân là kim loại có nhiệt độ nóng chảy thấp (-38,83 °C), ở thể lỏng ở nhiệt độ thường.',
+        cat: 'cat-sci',
+      },
+      {
+        content: 'Đố kiến thức: Hành tinh nào trong Hệ Mặt Trời được mệnh danh là "Hành tinh Đỏ"?',
+        correct: 'Sao Hỏa (Mars)',
+        wrongs: ['Sao Kim (Venus)', 'Sao Thủy (Mercury)', 'Sao Mộc (Jupiter)'],
+        exp: 'Sao Hỏa có bề mặt chứa nhiều oxit sắt (rỉ sét) tạo nên màu đỏ cam đặc trưng.',
+        cat: 'cat-sci',
+      },
+      {
+        content: 'Đố kiến thức: Khí nào chiếm thể tích lớn nhất (khoảng 78%) trong bầu khí quyển Trái Đất?',
+        correct: 'Khí Nitơ (N2)',
+        wrongs: ['Khí Oxy (O2)', 'Khí Carbonic (CO2)', 'Khí Heli (He)'],
+        exp: 'Khí quyển Trái Đất gồm khoảng 78% Nitơ, 21% Oxy và 1% các khí khác.',
+        cat: 'cat-sci',
+      },
+      {
+        content: 'Đố kiến thức: Loài chim nhỏ bé duy nhất trên thế giới có khả năng bay lùi là gì?',
+        correct: 'Chim ruồi (Hummingbird)',
+        wrongs: ['Chim sẻ', 'Chim yến', 'Chim bói cá'],
+        exp: 'Cấu tạo khớp cánh linh hoạt giúp chim ruồi có thể bay đứng yên và bay lùi trong không trung.',
+        cat: 'cat-sci',
+      },
+      {
+        content: 'Đố kiến thức: Vitamin nào được cơ thể con người tự tổng hợp hiệu quả nhất khi tắm nắng sáng sớm?',
+        correct: 'Vitamin D',
+        wrongs: ['Vitamin A', 'Vitamin C', 'Vitamin B12'],
+        exp: 'Ánh nắng mặt trời kích thích da tổng hợp Vitamin D tự nhiên rất tốt cho xương.',
+        cat: 'cat-sci',
+      },
+    ];
+
+    for (const item of folkTriviaPool) {
+      curatedRandomPool.push({
+        categoryId: item.cat,
+        content: item.content,
+        difficulty: 'EASY',
+        correctAnswer: item.correct,
+        wrongAnswers: item.wrongs as [string, string, string],
+        explanation: item.exp,
+        topicTags: ['Đố vui kiến thức', 'Đời sống'],
+        sourceType: 'WIKIPEDIA',
+        attribution: 'Kho tàng tri thức & Văn hóa dân gian Việt Nam',
+      });
+    }
+
+    // Lọc CHẶT CHẼ các câu chưa từng có trong DB (CHỐNG TRÙNG LẶP 100%)
     const availablePool = curatedRandomPool.filter(
       (item) => !existingContents.has(item.content.trim().toLowerCase())
     );
 
-    // Nếu đã dùng hết pool tĩnh, sinh thêm câu hỏi tính nhẩm & tư duy nhanh ngẫu nhiên
-    while (availablePool.length < count) {
-      const a = Math.floor(Math.random() * 25) + 12;
-      const b = Math.floor(Math.random() * 15) + 6;
-      const c = Math.floor(Math.random() * 20) + 5;
-      const ans = a * b + c;
-      const content = `Đố nhanh tư duy: Kết quả của phép tính (${a} × ${b}) + ${c} bằng bao nhiêu?`;
-      if (!existingContents.has(content.toLowerCase())) {
-        availablePool.push({
-          categoryId: 'cat-tech',
-          content,
-          difficulty: 'MEDIUM',
-          correctAnswer: `${ans}`,
-          wrongAnswers: [`${ans + 10}`, `${ans - 8}`, `${ans + b}`],
-          explanation: `Ta có ${a} × ${b} = ${a * b}, cộng thêm ${c} được kết quả chính xác là ${ans}.`,
-          topicTags: ['Tư duy nhanh', 'Toán đố'],
-          sourceType: 'AI',
-          attribution: 'Bộ sinh câu hỏi tư duy nhanh Knowledge Battle',
-        });
-        existingContents.add(content.toLowerCase());
-      }
+    // Nếu đã nạp hết toàn bộ câu hỏi trong kho mẫu có sẵn, trả về rỗng để không bao giờ chèn trùng lặp!
+    if (availablePool.length === 0) {
+      return [];
     }
 
     // Xáo trộn pool trước khi lấy
@@ -982,7 +1109,7 @@ export class DatabaseService implements OnModuleInit {
       [availablePool[i], availablePool[j]] = [availablePool[j], availablePool[i]];
     }
 
-    const picked = availablePool.slice(0, Math.max(1, count));
+    const picked = availablePool.slice(0, Math.min(count, availablePool.length));
     const labels: OptionLabel[] = ['A', 'B', 'C', 'D'];
     const created: QuestionRecord[] = [];
 
