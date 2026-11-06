@@ -28,7 +28,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       widthPercent: number;
       offsetX: number;
       offsetY: number;
+      paddingTop?: number;
+      paddingBottom?: number;
       preset: string;
+      theme?: string;
     }
   >();
 
@@ -118,18 +121,24 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       widthPercent?: number;
       offsetX?: number;
       offsetY?: number;
+      paddingTop?: number;
+      paddingBottom?: number;
       preset?: string;
+      theme?: string;
     }
   ) {
     const roomCode = (payload?.roomCode || 'KB2026').toUpperCase();
     const current = this.roomLayoutConfigs.get(roomCode) || {
-      frameWidth: 362,
-      frameHeight: 444,
+      frameWidth: 1080,
+      frameHeight: 1920,
       scale: 100,
-      widthPercent: 96,
+      widthPercent: 100,
       offsetX: 0,
       offsetY: 0,
-      preset: '362x444',
+      paddingTop: 160,
+      paddingBottom: 262,
+      preset: 'fullscreen',
+      theme: 'cute',
     };
     const updated = {
       frameWidth: Number(payload.frameWidth ?? current.frameWidth),
@@ -138,7 +147,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       widthPercent: Number(payload.widthPercent ?? current.widthPercent),
       offsetX: Number(payload.offsetX ?? current.offsetX),
       offsetY: Number(payload.offsetY ?? current.offsetY),
+      paddingTop: Number(payload.paddingTop ?? current.paddingTop),
+      paddingBottom: Number(payload.paddingBottom ?? current.paddingBottom),
       preset: payload.preset || current.preset,
+      theme: (payload as any).theme || (current as any).theme || 'cute',
     };
     this.roomLayoutConfigs.set(roomCode, updated);
     this.emitToRoom(roomCode, 'layout.config', updated);

@@ -1,50 +1,87 @@
 <template>
   <div
     class="gameshow-root"
-    :class="{
-      'layout-vertical': isVerticalLayout,
-      'layout-landscape': !isVerticalLayout,
-      'is-embedded': embedded,
-    }"
+    :class="[
+      `theme-${currentTheme}`,
+      {
+        'layout-vertical': isVerticalLayout,
+        'layout-landscape': !isVerticalLayout,
+        'is-embedded': embedded,
+      }
+    ]"
   >
     <!-- Phaser 3 Canvas Stage Layer -->
     <div ref="phaserContainer" class="phaser-canvas-layer"></div>
 
-    <!-- Floating Quick Calibrator Toggle (chỉ hiện trên màn hình Game Show độc lập) -->
+    <!-- Floating Quick Calibrator & Theme Toggle (chỉ hiện trên màn hình Game Show độc lập) -->
     <div v-if="!embedded" class="calib-floating-widget" :class="{ 'calib-open': showCalibPanel }">
-      <button
-        type="button"
-        class="calib-toggle-btn"
-        title="Chỉnh khớp khung hình TikTok Điện thoại"
-        @click="showCalibPanel = !showCalibPanel"
-      >
-        <span>⚙️ {{ showCalibPanel ? 'Đóng chỉnh khung' : 'Chỉnh khớp ĐT' }}</span>
-      </button>
+      <div class="calib-top-actions">
+        <!-- Nút đổi theme nhanh 1 chạm -->
+        <button
+          type="button"
+          class="quick-theme-btn"
+          :title="`Đang dùng theme: ${currentThemeInfo?.name} (Bấm để đổi nhanh)`"
+          @click="cycleNextTheme"
+        >
+          <span>{{ currentThemeInfo?.icon }} {{ currentThemeInfo?.name }}</span>
+        </button>
+
+        <!-- Nút mở bảng cài đặt -->
+        <button
+          type="button"
+          class="calib-toggle-btn"
+          title="Cài đặt Theme & Khung hình TikTok"
+          @click="showCalibPanel = !showCalibPanel"
+        >
+          <span>⚙️ {{ showCalibPanel ? 'Đóng' : 'Chỉnh khớp & Theme' }}</span>
+        </button>
+      </div>
 
       <div v-if="showCalibPanel" class="calib-popup-card tabular-nums">
+        <!-- BỘ CHỌN THEME PHONG CÁCH -->
+        <div class="theme-selector-section">
+          <div class="theme-section-title">
+            <span>🎨 Chọn Giao Diện (Theme):</span>
+            <strong class="theme-current-name">{{ currentThemeInfo?.name }}</strong>
+          </div>
+          <div class="theme-options-grid">
+            <button
+              v-for="th in THEME_OPTIONS"
+              :key="th.id"
+              type="button"
+              class="theme-card-btn"
+              :class="{ active: currentTheme === th.id }"
+              @click="switchTheme(th.id)"
+            >
+              <span class="theme-btn-icon">{{ th.icon }}</span>
+              <div class="theme-btn-texts">
+                <strong>{{ th.name }}</strong>
+                <small>{{ th.sub }}</small>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <!-- BỘ CHỌN KHUNG TIKTOK ĐIỆN THOẠI -->
         <div class="calib-popup-header">
-          <strong>🎛️ Khung TikTok ĐT ({{ layoutCalib.frameWidth }}×{{ layoutCalib.frameHeight }})</strong>
-          <button type="button" class="calib-reset-btn" @click="applyCalibPreset('362x444')">
-            Chuẩn 362×444
-          </button>
+          <strong>📱 Khung Hình TikTok</strong>
+          <span class="calib-badge">{{
+            layoutCalib.preset === 'fullscreen'
+              ? 'Full Màn Hình'
+              : layoutCalib.preset === 'tiktok-safe-zone'
+                ? 'Vùng An Toàn (160/262)'
+                : `${layoutCalib.frameWidth}×${layoutCalib.frameHeight}`
+          }}</span>
         </div>
 
         <div class="calib-presets-row">
           <button
             type="button"
             class="calib-preset-btn"
-            :class="{ active: layoutCalib.preset === '362x444' }"
-            @click="applyCalibPreset('362x444')"
+            :class="{ active: layoutCalib.preset === 'fullscreen' }"
+            @click="applyCalibPreset('fullscreen')"
           >
-            📱 362×444 (Chuẩn)
-          </button>
-          <button
-            type="button"
-            class="calib-preset-btn"
-            :class="{ active: layoutCalib.preset === 'tiktok-narrow' }"
-            @click="applyCalibPreset('tiktok-narrow')"
-          >
-            📐 Nhỏ gọn (320×400)
+            📱 Full Tràn Viền
           </button>
           <button
             type="button"
@@ -52,11 +89,51 @@
             :class="{ active: layoutCalib.preset === 'tiktok-safe-zone' }"
             @click="applyCalibPreset('tiktok-safe-zone')"
           >
-            💬 Né chat đáy
+            🎯 Vùng An Toàn
+          </button>
+          <button
+            type="button"
+            class="calib-preset-btn"
+            :class="{ active: layoutCalib.preset === '362x444' }"
+            @click="applyCalibPreset('362x444')"
+          >
+            📦 Khung 362×444
           </button>
         </div>
 
-        <div class="calib-slider-group">
+        <!-- Safe zone sliders for TikTok Live (160px top, 262px bottom) -->
+        <div v-if="layoutCalib.preset === 'tiktok-safe-zone'" class="calib-slider-group">
+          <label>
+            <span>Né trên (Avatar & BXH)</span>
+            <strong>{{ layoutCalib.paddingTop }}px</strong>
+          </label>
+          <input
+            v-model.number="layoutCalib.paddingTop"
+            type="range"
+            min="0"
+            max="350"
+            step="2"
+            @input="onManualCalibChange"
+          />
+        </div>
+
+        <div v-if="layoutCalib.preset === 'tiktok-safe-zone'" class="calib-slider-group">
+          <label>
+            <span>Né dưới (Khung Chat & Quà)</span>
+            <strong>{{ layoutCalib.paddingBottom }}px</strong>
+          </label>
+          <input
+            v-model.number="layoutCalib.paddingBottom"
+            type="range"
+            min="0"
+            max="450"
+            step="2"
+            @input="onManualCalibChange"
+          />
+        </div>
+
+        <!-- Width / Height sliders for 362x444 or custom -->
+        <div v-if="layoutCalib.preset === '362x444' || layoutCalib.preset === 'custom'" class="calib-slider-group">
           <label>
             <span>Chiều rộng khung (px)</span>
             <strong>{{ layoutCalib.frameWidth }}px</strong>
@@ -65,13 +142,13 @@
             v-model.number="layoutCalib.frameWidth"
             type="range"
             min="260"
-            max="640"
-            step="2"
+            max="1080"
+            step="4"
             @input="onManualCalibChange"
           />
         </div>
 
-        <div class="calib-slider-group">
+        <div v-if="layoutCalib.preset === '362x444' || layoutCalib.preset === 'custom'" class="calib-slider-group">
           <label>
             <span>Chiều cao khung (px)</span>
             <strong>{{ layoutCalib.frameHeight }}px</strong>
@@ -80,12 +157,13 @@
             v-model.number="layoutCalib.frameHeight"
             type="range"
             min="320"
-            max="840"
-            step="2"
+            max="1920"
+            step="4"
             @input="onManualCalibChange"
           />
         </div>
 
+        <!-- Common Zoom / Offset sliders -->
         <div class="calib-slider-group">
           <label>
             <span>Thu phóng cỡ khung (Zoom)</span>
@@ -95,7 +173,7 @@
             v-model.number="layoutCalib.scale"
             type="range"
             min="50"
-            max="130"
+            max="150"
             step="1"
             @input="onManualCalibChange"
           />
@@ -103,7 +181,7 @@
 
         <div class="calib-slider-group">
           <label>
-            <span>Đẩy Lên / Xuống (Tránh chat/avatar)</span>
+            <span>Đẩy Lên / Xuống (Y)</span>
             <strong>{{ layoutCalib.offsetY > 0 ? `+${layoutCalib.offsetY}` : layoutCalib.offsetY }}%</strong>
           </label>
           <input
@@ -118,7 +196,7 @@
 
         <div class="calib-slider-group">
           <label>
-            <span>Đẩy Trái / Phải</span>
+            <span>Đẩy Trái / Phải (X)</span>
             <strong>{{ layoutCalib.offsetX > 0 ? `+${layoutCalib.offsetX}` : layoutCalib.offsetX }}%</strong>
           </label>
           <input
@@ -137,6 +215,11 @@
     <div
       ref="broadcastFrameRef"
       class="broadcast-frame"
+      :class="{
+        'frame-fullscreen': layoutCalib.preset === 'fullscreen',
+        'frame-safe-zone': layoutCalib.preset === 'tiktok-safe-zone',
+        'frame-box-362x444': layoutCalib.preset === '362x444',
+      }"
       :style="broadcastFrameStyle"
     >
       <!-- Top Broadcast Header (Tích hợp thông báo Quà tặng gọn trên thanh Header, không bao giờ che câu hỏi) -->
@@ -485,19 +568,103 @@ let phaserStage: PhaserStageController | null = null;
 let socket: Socket | null = null;
 let frameResizeObserver: ResizeObserver | null = null;
 
+type LayoutPreset = 'fullscreen' | 'tiktok-safe-zone' | '362x444' | 'custom';
+type GameTheme = 'cute' | 'modern' | 'galaxy' | 'luxury';
+
+const THEME_OPTIONS = [
+  {
+    id: 'cute' as GameTheme,
+    name: 'Dễ Thương',
+    sub: 'Kẹo Ngọt Pastel',
+    icon: '🌸',
+    color: '#ff6b9d',
+    desc: 'Hồng phấn kẹo dẻo, nút nổi 3D, chữ tròn đáng yêu',
+  },
+  {
+    id: 'modern' as GameTheme,
+    name: 'Hiện Đại',
+    sub: 'Aurora Glass',
+    icon: '✨',
+    color: '#38bdf8',
+    desc: 'Kính mờ cực quang, font Jakarta thanh lịch',
+  },
+  {
+    id: 'galaxy' as GameTheme,
+    name: 'Cyber Esport',
+    sub: 'Neon Gaming',
+    icon: '🎮',
+    color: '#00f5d4',
+    desc: 'Viền điện tử phát sáng, font sci-fi cực chất',
+  },
+  {
+    id: 'luxury' as GameTheme,
+    name: 'Hoàng Gia',
+    sub: 'Vàng Kim 24K',
+    icon: '👑',
+    color: '#fbbf24',
+    desc: 'Vàng kim vương giả, phong cách Triệu Phú',
+  },
+];
+
+const currentTheme = ref<GameTheme>('cute');
+
+const currentThemeInfo = computed(() => {
+  return THEME_OPTIONS.find((t) => t.id === currentTheme.value) || THEME_OPTIONS[0];
+});
+
+function switchTheme(theme: GameTheme) {
+  currentTheme.value = theme;
+  phaserStage?.setVisualStyle(theme);
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem('kb_selected_theme_v2', theme);
+    } catch {}
+  }
+  socket?.emit('layout.update', {
+    roomCode: roomCode.value,
+    ...layoutCalib.value,
+    theme,
+  });
+}
+
+function cycleNextTheme() {
+  const currentIndex = THEME_OPTIONS.findIndex((t) => t.id === currentTheme.value);
+  const nextIndex = (currentIndex + 1) % THEME_OPTIONS.length;
+  switchTheme(THEME_OPTIONS[nextIndex].id);
+}
+
+function loadSavedTheme() {
+  if (typeof window === 'undefined') return;
+  try {
+    const q = route.query.theme as GameTheme;
+    if (q && ['cute', 'modern', 'galaxy', 'luxury'].includes(q)) {
+      currentTheme.value = q;
+      return;
+    }
+    const saved = window.localStorage.getItem('kb_selected_theme_v2') as GameTheme;
+    if (saved && ['cute', 'modern', 'galaxy', 'luxury'].includes(saved)) {
+      currentTheme.value = saved;
+    } else {
+      currentTheme.value = 'cute';
+    }
+  } catch {}
+}
+
 const showCalibPanel = ref(false);
 const autoFitScale = ref(1);
 const layoutCalib = ref({
-  frameWidth: Number(route.query.fw) || 362,
-  frameHeight: Number(route.query.fh) || 444,
+  preset: (route.query.preset as LayoutPreset) || 'fullscreen',
+  frameWidth: Number(route.query.fw) || 1080,
+  frameHeight: Number(route.query.fh) || 1920,
   scale: Number(route.query.scale) || 100,
-  widthPercent: Number(route.query.w) || 96,
+  widthPercent: Number(route.query.w) || 100,
   offsetX: Number(route.query.ox) || 0,
   offsetY: Number(route.query.oy) || 0,
-  preset: String(route.query.preset || '362x444'),
+  paddingTop: Number(route.query.pt) || 160,
+  paddingBottom: Number(route.query.pb) || 262,
 });
 
-const STORAGE_CALIB_KEY = 'kb_vertical_layout_362x444_v3';
+const STORAGE_CALIB_KEY = 'kb_vertical_layout_v5';
 
 function loadSavedCalib() {
   if (typeof window === 'undefined') return;
@@ -506,18 +673,23 @@ function loadSavedCalib() {
     if (raw) {
       const parsed = JSON.parse(raw);
       layoutCalib.value = {
-        frameWidth: Number(route.query.fw) || Number(parsed.frameWidth ?? 362),
-        frameHeight: Number(route.query.fh) || Number(parsed.frameHeight ?? 444),
+        preset: (route.query.preset as LayoutPreset) || parsed.preset || 'fullscreen',
+        frameWidth: Number(route.query.fw) || Number(parsed.frameWidth ?? 1080),
+        frameHeight: Number(route.query.fh) || Number(parsed.frameHeight ?? 1920),
         scale: Number(route.query.scale) || Number(parsed.scale ?? 100),
-        widthPercent: Number(route.query.w) || Number(parsed.widthPercent ?? 96),
+        widthPercent: Number(route.query.w) || Number(parsed.widthPercent ?? 100),
         offsetX: Number(route.query.ox) || Number(parsed.offsetX ?? 0),
         offsetY: Number(route.query.oy) || Number(parsed.offsetY ?? 0),
-        preset: String(route.query.preset || parsed.preset || '362x444'),
+        paddingTop: Number(route.query.pt) || Number(parsed.paddingTop ?? 160),
+        paddingBottom: Number(route.query.pb) || Number(parsed.paddingBottom ?? 262),
       };
+      return;
     }
   } catch {
     // ignore storage errors
   }
+  const presetQuery = (route.query.preset as LayoutPreset) || 'fullscreen';
+  applyCalibPreset(presetQuery);
 }
 
 function saveAndBroadcastCalib() {
@@ -531,40 +703,47 @@ function saveAndBroadcastCalib() {
   socket?.emit('layout.update', {
     roomCode: roomCode.value,
     ...layoutCalib.value,
+    theme: currentTheme.value,
   });
   requestAnimationFrame(recalcAutoFit);
 }
 
-function applyCalibPreset(preset: '362x444' | 'tiktok-narrow' | 'tiktok-safe-zone') {
-  if (preset === '362x444') {
+function applyCalibPreset(preset: 'fullscreen' | 'tiktok-safe-zone' | '362x444') {
+  if (preset === 'fullscreen') {
     layoutCalib.value = {
-      frameWidth: 362,
-      frameHeight: 444,
+      preset: 'fullscreen',
+      frameWidth: 1080,
+      frameHeight: 1920,
       scale: 100,
-      widthPercent: 96,
+      widthPercent: 100,
       offsetX: 0,
       offsetY: 0,
-      preset: '362x444',
-    };
-  } else if (preset === 'tiktok-narrow') {
-    layoutCalib.value = {
-      frameWidth: 320,
-      frameHeight: 400,
-      scale: 100,
-      widthPercent: 90,
-      offsetX: 0,
-      offsetY: 0,
-      preset: 'tiktok-narrow',
+      paddingTop: 12,
+      paddingBottom: 16,
     };
   } else if (preset === 'tiktok-safe-zone') {
     layoutCalib.value = {
+      preset: 'tiktok-safe-zone',
+      frameWidth: 1080,
+      frameHeight: 1920,
+      scale: 100,
+      widthPercent: 100,
+      offsetX: 0,
+      offsetY: 0,
+      paddingTop: 160,
+      paddingBottom: 262,
+    };
+  } else if (preset === '362x444') {
+    layoutCalib.value = {
+      preset: '362x444',
       frameWidth: 362,
       frameHeight: 444,
-      scale: 96,
+      scale: 100,
       widthPercent: 96,
       offsetX: 0,
-      offsetY: -8,
-      preset: 'tiktok-safe-zone',
+      offsetY: 0,
+      paddingTop: 0,
+      paddingBottom: 0,
     };
   }
   saveAndBroadcastCalib();
@@ -582,10 +761,22 @@ function recalcAutoFit() {
   }
   const el = broadcastFrameRef.value;
   const naturalHeight = el.scrollHeight || el.offsetHeight || 1;
-  const targetH = isVerticalLayout.value
-    ? Math.min(layoutCalib.value.frameHeight || 444, window.innerHeight * 0.96)
-    : window.innerHeight * 0.94;
-  if (naturalHeight > targetH && targetH > 120) {
+  let targetH = window.innerHeight * 0.96;
+
+  if (isVerticalLayout.value) {
+    if (layoutCalib.value.preset === '362x444') {
+      targetH = Math.min(layoutCalib.value.frameHeight || 444, window.innerHeight * 0.96);
+    } else if (layoutCalib.value.preset === 'tiktok-safe-zone') {
+      const topPad = layoutCalib.value.paddingTop ?? 160;
+      const bottomPad = layoutCalib.value.paddingBottom ?? 262;
+      const safeAvailable = window.innerHeight - topPad - bottomPad;
+      targetH = safeAvailable > 200 ? safeAvailable : window.innerHeight * 0.95;
+    } else {
+      targetH = window.innerHeight;
+    }
+  }
+
+  if (layoutCalib.value.preset === '362x444' && naturalHeight > targetH && targetH > 120) {
     autoFitScale.value = Math.max(0.55, Math.min(1, targetH / naturalHeight));
   } else {
     autoFitScale.value = 1;
@@ -594,22 +785,63 @@ function recalcAutoFit() {
 
 const broadcastFrameStyle = computed(() => {
   if (props.embedded) return {};
+
+  const effectiveScale = (layoutCalib.value.scale / 100) * autoFitScale.value;
+  const ox = layoutCalib.value.offsetX || 0;
+  const oy = layoutCalib.value.offsetY || 0;
+  const transform =
+    effectiveScale !== 1 || ox !== 0 || oy !== 0
+      ? `translate(${ox}vw, ${oy}vh) scale(${effectiveScale.toFixed(3)})`
+      : undefined;
+
   if (!isVerticalLayout.value) {
-    const s = (layoutCalib.value.scale / 100) * autoFitScale.value;
-    if (s === 1 && !layoutCalib.value.offsetX && !layoutCalib.value.offsetY) return {};
+    if (!transform) return {};
     return {
-      transform: `translate(${layoutCalib.value.offsetX}vw, ${layoutCalib.value.offsetY}vh) scale(${s.toFixed(3)})`,
+      transform,
       transformOrigin: 'center center',
     };
   }
-  const effectiveScale = (layoutCalib.value.scale / 100) * autoFitScale.value;
+
+  // --- Chế độ dọc TikTok LIVE ---
+  if (layoutCalib.value.preset === 'fullscreen') {
+    return {
+      width: '100%',
+      maxWidth: '100%',
+      height: '100%',
+      maxHeight: '100%',
+      padding: '12px 14px',
+      boxSizing: 'border-box',
+      transform,
+      transformOrigin: 'center center',
+    };
+  }
+
+  if (layoutCalib.value.preset === 'tiktok-safe-zone') {
+    const topPad = layoutCalib.value.paddingTop ?? 160;
+    const bottomPad = layoutCalib.value.paddingBottom ?? 262;
+    return {
+      width: '100%',
+      maxWidth: '100%',
+      height: '100%',
+      maxHeight: '100%',
+      paddingTop: `${topPad}px`,
+      paddingBottom: `${bottomPad}px`,
+      paddingLeft: '12px',
+      paddingRight: '12px',
+      boxSizing: 'border-box',
+      transform,
+      transformOrigin: 'center center',
+    };
+  }
+
+  // Khung 362x444 hoặc custom
   const fw = layoutCalib.value.frameWidth || 362;
   const fh = layoutCalib.value.frameHeight || 444;
   return {
     width: `${fw}px`,
     maxWidth: '98vw',
     maxHeight: `${fh}px`,
-    transform: `translate(${layoutCalib.value.offsetX}vw, ${layoutCalib.value.offsetY}vh) scale(${effectiveScale.toFixed(3)})`,
+    transform,
     transformOrigin: 'center center',
   };
 });
@@ -619,17 +851,24 @@ function handleStorageSync(e: StorageEvent) {
     try {
       const parsed = JSON.parse(e.newValue);
       layoutCalib.value = {
-        frameWidth: Number(parsed.frameWidth ?? 362),
-        frameHeight: Number(parsed.frameHeight ?? 444),
+        frameWidth: Number(parsed.frameWidth ?? 1080),
+        frameHeight: Number(parsed.frameHeight ?? 1920),
         scale: Number(parsed.scale ?? 100),
-        widthPercent: Number(parsed.widthPercent ?? 96),
+        widthPercent: Number(parsed.widthPercent ?? 100),
         offsetX: Number(parsed.offsetX ?? 0),
         offsetY: Number(parsed.offsetY ?? 0),
-        preset: String(parsed.preset || 'custom'),
+        paddingTop: Number(parsed.paddingTop ?? 160),
+        paddingBottom: Number(parsed.paddingBottom ?? 262),
+        preset: String(parsed.preset || 'fullscreen') as LayoutPreset,
       };
       requestAnimationFrame(recalcAutoFit);
     } catch {
       // ignore
+    }
+  }
+  if (e.key === 'kb_selected_theme_v2' && e.newValue) {
+    if (['cute', 'modern', 'galaxy', 'luxury'].includes(e.newValue)) {
+      currentTheme.value = e.newValue as GameTheme;
     }
   }
 }
@@ -748,6 +987,7 @@ async function loadInitialRecovery() {
 }
 
 onMounted(async () => {
+  loadSavedTheme();
   loadSavedCalib();
   window.addEventListener('resize', handleResize);
   window.addEventListener('storage', handleStorageSync);
@@ -763,6 +1003,9 @@ onMounted(async () => {
   if (phaserContainer.value) {
     phaserStage = new PhaserStageController();
     phaserStage.mount(phaserContainer.value);
+    setTimeout(() => {
+      phaserStage?.setVisualStyle(currentTheme.value);
+    }, 60);
   }
 
   await loadInitialRecovery();
@@ -822,14 +1065,23 @@ onMounted(async () => {
 
   socket.on('layout.config', (cfg) => {
     if (!cfg) return;
+    if (cfg.theme && ['cute', 'modern', 'galaxy', 'luxury'].includes(cfg.theme)) {
+      currentTheme.value = cfg.theme as GameTheme;
+      phaserStage?.setVisualStyle(cfg.theme as GameTheme);
+      try {
+        window.localStorage.setItem('kb_selected_theme_v2', cfg.theme);
+      } catch {}
+    }
     layoutCalib.value = {
-      frameWidth: Number(cfg.frameWidth ?? layoutCalib.value.frameWidth ?? 362),
-      frameHeight: Number(cfg.frameHeight ?? layoutCalib.value.frameHeight ?? 444),
+      frameWidth: Number(cfg.frameWidth ?? layoutCalib.value.frameWidth ?? 1080),
+      frameHeight: Number(cfg.frameHeight ?? layoutCalib.value.frameHeight ?? 1920),
       scale: Number(cfg.scale ?? layoutCalib.value.scale),
       widthPercent: Number(cfg.widthPercent ?? layoutCalib.value.widthPercent),
       offsetX: Number(cfg.offsetX ?? layoutCalib.value.offsetX),
       offsetY: Number(cfg.offsetY ?? layoutCalib.value.offsetY),
-      preset: String(cfg.preset || layoutCalib.value.preset),
+      paddingTop: Number(cfg.paddingTop ?? layoutCalib.value.paddingTop ?? 160),
+      paddingBottom: Number(cfg.paddingBottom ?? layoutCalib.value.paddingBottom ?? 262),
+      preset: String(cfg.preset || layoutCalib.value.preset) as LayoutPreset,
     };
     if (typeof window !== 'undefined') {
       try {
@@ -880,6 +1132,13 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   padding: 0.5rem;
+  transition: background 0.4s ease, color 0.4s ease;
+}
+
+.gameshow-root.layout-vertical {
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
 }
 
 .gameshow-root.is-embedded {
@@ -909,136 +1168,180 @@ onBeforeUnmount(() => {
 }
 
 /*
- * Chế độ Dọc TikTok LIVE (Chuẩn 362 × 444 px theo khung điện thoại):
- * Khung game gọn đúng 362x444px, căn giữa màn hình, không bị tràn mép!
+ * Chế độ Dọc TikTok LIVE:
+ * 1. Full Màn Hình (Tràn viền 100%)
+ * 2. Vùng An Toàn TikTok (Né 160px trên / 262px dưới)
+ * 3. Khung cố định 362×444
  */
 .layout-vertical .broadcast-frame {
-  width: 362px;
-  max-width: 98vw;
-  max-height: 444px;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  max-height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.layout-vertical .broadcast-frame.frame-box-362x444 {
+  width: 362px !important;
+  max-width: 98vw !important;
+  max-height: 444px !important;
+  height: auto !important;
+  margin: auto;
+  justify-content: center;
   gap: 6px;
 }
 
 .layout-vertical .stage-header {
-  padding: 6px 10px;
-  border-radius: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  flex-shrink: 0;
 }
 
 .layout-vertical .stage-title {
-  font-size: 12px;
+  font-size: clamp(12px, 2vh, 18px);
 }
 
 .layout-vertical .live-indicator {
-  font-size: 9px;
-  padding: 2px 6px;
-}
-
-.layout-vertical .metric-pill {
   font-size: 10px;
   padding: 2px 7px;
 }
 
+.layout-vertical .metric-pill {
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
 .layout-vertical .stage-grid {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 0;
+}
+
+.layout-vertical .broadcast-frame.frame-box-362x444 .stage-grid {
+  flex: initial;
+  display: grid;
   grid-template-columns: 1fr;
   gap: 6px;
 }
 
 .layout-vertical .center-stage-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 12px 14px;
+  border-radius: 12px;
+  min-height: 0;
+}
+
+.layout-vertical .broadcast-frame.frame-box-362x444 .center-stage-area {
   padding: 10px 12px;
   border-radius: 10px;
 }
 
 .layout-vertical .waiting-screen {
-  gap: 7px;
+  gap: 8px;
 }
 
 .layout-vertical .trophy-emblem {
-  width: 34px;
-  height: 34px;
+  width: clamp(34px, 5vh, 48px);
+  height: clamp(34px, 5vh, 48px);
   margin-bottom: 2px;
 }
 
 .layout-vertical .waiting-headline {
-  font-size: 16px;
+  font-size: clamp(16px, 2.4vh, 22px);
 }
 
 .layout-vertical .waiting-subtext {
-  font-size: 11px;
-  line-height: 1.25;
+  font-size: clamp(11px, 1.6vh, 14px);
+  line-height: 1.3;
 }
 
 .layout-vertical .rules-strip {
   grid-template-columns: 1fr;
-  gap: 4px;
+  gap: 5px;
 }
 
 .layout-vertical .rule-item {
-  padding: 5px 8px;
-  border-radius: 7px;
+  padding: 6px 10px;
+  border-radius: 8px;
   gap: 8px;
 }
 
 .layout-vertical .rule-item strong {
-  font-size: 11px;
+  font-size: clamp(11px, 1.6vh, 14px);
 }
 
 .layout-vertical .rule-item p {
-  font-size: 10px;
+  font-size: clamp(10px, 1.4vh, 12px);
 }
 
 .layout-vertical .waiting-players-box {
-  padding: 6px 9px;
-  border-radius: 7px;
+  padding: 7px 10px;
+  border-radius: 8px;
 }
 
 .layout-vertical .waiting-players-header {
-  font-size: 10.5px;
-  margin-bottom: 3px;
+  font-size: clamp(10.5px, 1.5vh, 13px);
+  margin-bottom: 4px;
 }
 
 .layout-vertical .empty-players-hint {
-  font-size: 10px;
+  font-size: clamp(10px, 1.4vh, 12px);
 }
 
 .layout-vertical .question-screen,
 .layout-vertical .reveal-screen {
-  gap: 6px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  gap: 8px;
 }
 
 .layout-vertical .question-prompt-box {
-  padding: 8px 10px;
-  border-radius: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
 }
 
 .layout-vertical .question-text {
-  font-size: 13px;
-  line-height: 1.25;
+  font-size: clamp(14px, 2.2vh, 22px);
+  line-height: 1.35;
 }
 
 .layout-vertical .options-grid {
   grid-template-columns: 1fr;
-  gap: 5px;
+  gap: 6px;
 }
 
 .layout-vertical .option-card {
-  padding: 5px 8px;
-  border-radius: 7px;
-  gap: 7px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  gap: 8px;
 }
 
 .layout-vertical .option-key {
-  width: 24px;
-  height: 24px;
-  font-size: 12px;
+  width: clamp(26px, 3.8vh, 36px);
+  height: clamp(26px, 3.8vh, 36px);
+  font-size: clamp(12px, 1.8vh, 16px);
 }
 
 .layout-vertical .option-text {
-  font-size: 12px;
+  font-size: clamp(12.5px, 1.8vh, 16px);
 }
 
 .layout-vertical .sidebar-card {
-  padding: 6px 10px;
-  border-radius: 8px;
+  padding: 7px 12px;
+  border-radius: 10px;
+  flex-shrink: 0;
 }
 
 .layout-vertical .sidebar-header {
@@ -1046,11 +1349,11 @@ onBeforeUnmount(() => {
 }
 
 .layout-vertical .sidebar-header h3 {
-  font-size: 11px;
+  font-size: clamp(11px, 1.6vh, 14px);
 }
 
 .layout-vertical .sidebar-empty {
-  font-size: 10px;
+  font-size: clamp(10px, 1.4vh, 12px);
 }
 
 .gameshow-root.is-embedded .broadcast-frame {
@@ -1058,7 +1361,7 @@ onBeforeUnmount(() => {
   max-height: 100%;
 }
 
-/* Floating Quick Calibrator Widget */
+/* Floating Quick Calibrator & Theme Widget */
 .calib-floating-widget {
   position: fixed;
   top: 0.6rem;
@@ -1070,6 +1373,32 @@ onBeforeUnmount(() => {
   gap: 0.45rem;
 }
 
+.calib-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.quick-theme-btn {
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(13, 17, 39, 0.85);
+  border: 1px solid rgba(255, 117, 160, 0.45);
+  color: #fff;
+  font-size: 0.76rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease;
+  backdrop-filter: blur(6px);
+}
+
+.quick-theme-btn:hover {
+  transform: translateY(-1px) scale(1.03);
+  border-color: #ff75a0;
+  background: rgba(255, 117, 160, 0.25);
+}
+
 .calib-toggle-btn {
   padding: 0.35rem 0.7rem;
   border-radius: 999px;
@@ -1079,8 +1408,9 @@ onBeforeUnmount(() => {
   font-size: 0.75rem;
   font-weight: 700;
   cursor: pointer;
-  opacity: 0.32;
+  opacity: 0.4;
   transition: opacity 0.2s ease, background 0.2s ease;
+  backdrop-filter: blur(6px);
 }
 
 .calib-floating-widget:hover .calib-toggle-btn,
@@ -1090,15 +1420,94 @@ onBeforeUnmount(() => {
 }
 
 .calib-popup-card {
-  width: min(310px, 90vw);
-  padding: 0.85rem;
-  border-radius: 0.85rem;
+  width: min(340px, 94vw);
+  padding: 0.9rem;
+  border-radius: 0.9rem;
   background: rgba(10, 14, 34, 0.96);
   border: 1px solid rgba(0, 240, 255, 0.45);
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.7);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75);
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 0.75rem;
+  backdrop-filter: blur(12px);
+}
+
+/* Theme Selector in Popup */
+.theme-selector-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.theme-section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+}
+
+.theme-current-name {
+  color: var(--accent-cyan);
+  font-weight: 800;
+}
+
+.theme-options-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.35rem;
+}
+
+.theme-card-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.55rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
+  color: #e2f1ff;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.theme-card-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+.theme-card-btn.active {
+  background: rgba(0, 240, 255, 0.16);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.25);
+}
+
+.theme-btn-icon {
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+.theme-btn-texts {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  min-width: 0;
+}
+
+.theme-btn-texts strong {
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.theme-btn-texts small {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .calib-popup-header {
@@ -1109,14 +1518,14 @@ onBeforeUnmount(() => {
   color: var(--accent-cyan);
 }
 
-.calib-reset-btn {
-  padding: 0.2rem 0.5rem;
-  border-radius: 0.4rem;
-  border: 1px solid var(--border-subtle);
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-  font-size: 0.7rem;
-  cursor: pointer;
+.calib-badge {
+  font-size: 0.68rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(0, 240, 255, 0.16);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  color: var(--accent-cyan);
+  font-weight: 800;
 }
 
 .calib-presets-row {
@@ -1960,5 +2369,701 @@ onBeforeUnmount(() => {
   .layout-vertical .mini-lb-list {
     grid-template-columns: 1fr;
   }
+}
+
+/* ===================================================================
+   HỆ THỐNG 4 THEME ĐỘC BẢN: ĐỔI TOÀN DIỆN GIAO DIỆN, FONT CHỮ & MÀU SẮC
+   =================================================================== */
+
+/* -------------------------------------------------------------------
+   1. THEME DỄ THƯƠNG - KẸO NGỌT PASTEL (CUTE CANDY POP)
+   Font: Baloo 2 (Tiêu đề tròn trịa đáng yêu) + Quicksand (Nội dung mềm mại)
+   Tông màu: Hồng Dâu - Kem Sữa - Tím Khoai Môn - Vàng Bơ - Xanh Bạc Hà (Nền sáng Pastel)
+   ------------------------------------------------------------------- */
+.theme-cute {
+  font-family: 'Quicksand', 'Baloo 2', 'Be Vietnam Pro', sans-serif;
+  background: linear-gradient(155deg, #ffdde8 0%, #f3d1ff 38%, #dce8ff 74%, #ffe8f3 100%) !important;
+  color: #4a154b;
+  --accent-cyan: #ff4785;
+  --accent-gold: #f59e0b;
+  --accent-purple: #9333ea;
+  --text-primary: #4a154b;
+  --text-secondary: #7e3b82;
+  --text-muted: #a66aa8;
+}
+
+.theme-cute .stage-title,
+.theme-cute .waiting-headline,
+.theme-cute .question-text,
+.theme-cute .option-key,
+.theme-cute .countdown-clock,
+.theme-cute .leaderboard-stage-header h2,
+.theme-cute .victory-header h2,
+.theme-cute .podium-name,
+.theme-cute .podium-score,
+.theme-cute .sidebar-header h3 {
+  font-family: 'Baloo 2', 'Quicksand', cursive, sans-serif;
+  letter-spacing: 0.01em;
+}
+
+.theme-cute .stage-header {
+  background: rgba(255, 255, 255, 0.92);
+  border: 2.5px solid #ff85b3;
+  border-radius: 999px;
+  box-shadow: 0 5px 0 #ff9ec4, 0 10px 20px rgba(255, 71, 133, 0.16);
+  padding: 0.8vh 1.8vh;
+}
+
+.theme-cute .stage-header.header-gift-active {
+  background: linear-gradient(90deg, #fff0f6 0%, #fef3c7 100%);
+  border-color: #f59e0b;
+  box-shadow: 0 5px 0 #fbbf24, 0 8px 20px rgba(245, 158, 11, 0.25);
+}
+
+.theme-cute .gift-inline-text strong {
+  color: #d97706;
+}
+.theme-cute .gift-inline-text span {
+  color: #4a154b;
+}
+.theme-cute .gift-inline-text em {
+  color: #db2777;
+}
+
+.theme-cute .live-indicator {
+  background: linear-gradient(135deg, #ff4785, #ff75a0);
+  border: 2px solid #ffffff;
+  color: #ffffff;
+  box-shadow: 0 3px 8px rgba(255, 71, 133, 0.35);
+}
+
+.theme-cute .pulse-dot {
+  background: #ffffff;
+  box-shadow: 0 0 6px #ffffff;
+}
+
+.theme-cute .stage-title {
+  color: #831843;
+  font-weight: 800;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.theme-cute .metric-pill {
+  background: #fff0f7;
+  border: 2px solid #ff9ec4;
+  color: #be185d;
+  font-weight: 800;
+  box-shadow: 0 2px 0 #ffb3d1;
+}
+
+.theme-cute .center-stage-area {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(12px);
+  border: 3px solid #ff85b3;
+  border-radius: 26px;
+  box-shadow: 0 8px 0 #ff9ec4, 0 18px 40px rgba(190, 24, 93, 0.14);
+}
+
+.theme-cute .trophy-emblem {
+  background: linear-gradient(135deg, #fffbeb, #fde68a);
+  border: 3px solid #f59e0b;
+  color: #d97706;
+  border-radius: 22px;
+  box-shadow: 0 5px 0 #fbbf24;
+}
+
+.theme-cute .waiting-headline {
+  color: #9d174d;
+  text-shadow: 0 2px 0 #fce7f3;
+}
+
+.theme-cute .waiting-subtext {
+  color: #6b21a8;
+  font-weight: 700;
+}
+
+.theme-cute .waiting-subtext strong {
+  color: #e11d48;
+  background: #ffe4e6;
+  padding: 0 6px;
+  border-radius: 8px;
+}
+
+.theme-cute .rule-item {
+  background: #fff5f9;
+  border: 2px solid #fbcfe8;
+  border-radius: 18px;
+  box-shadow: 0 4px 0 #f9a8d4;
+}
+
+.theme-cute .rule-item strong {
+  color: #831843;
+  font-family: 'Baloo 2', sans-serif;
+}
+
+.theme-cute .rule-item p {
+  color: #7e22ce;
+  font-weight: 600;
+}
+
+.theme-cute .waiting-players-box {
+  background: #fdf4ff;
+  border: 2px dashed #e879f9;
+  border-radius: 18px;
+}
+
+.theme-cute .waiting-players-header {
+  color: #86198f;
+}
+
+.theme-cute .room-code-tag {
+  color: #ffffff;
+  background: #ec4899;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+.theme-cute .player-chip {
+  background: #ffffff;
+  border: 2px solid #f472b6;
+  color: #9d174d;
+  font-weight: 700;
+  box-shadow: 0 2px 0 #fbcfe8;
+}
+
+.theme-cute .empty-players-hint {
+  color: #a21caf;
+  font-weight: 600;
+}
+
+.theme-cute .question-meta-badges .badge-cyan {
+  background: #ffe4ef;
+  color: #be185d;
+  border: 2px solid #f472b6;
+  font-weight: 800;
+}
+
+.theme-cute .question-meta-badges .badge-purple {
+  background: #f3e8ff;
+  color: #7e22ce;
+  border: 2px solid #c084fc;
+  font-weight: 800;
+}
+
+.theme-cute .countdown-clock {
+  background: #fff0f6;
+  border: 2.5px solid #ff4785;
+  color: #e11d48;
+  border-radius: 999px;
+  box-shadow: 0 4px 0 #ff9ec4;
+}
+
+.theme-cute .countdown-clock.clock-urgent {
+  background: #ffe4e6;
+  border-color: #e11d48;
+  color: #be123c;
+}
+
+.theme-cute .timer-track {
+  background: #fce7f3;
+  border: 1.5px solid #f9a8d4;
+  height: 1.1vh;
+}
+
+.theme-cute .timer-fill {
+  background: linear-gradient(90deg, #ff4785, #a855f7, #38bdf8);
+}
+
+.theme-cute .question-prompt-box {
+  background: linear-gradient(180deg, #ffffff 0%, #fff7fb 100%);
+  border: 2.5px solid #f472b6;
+  border-radius: 22px;
+  box-shadow: 0 6px 0 #fbcfe8, 0 10px 24px rgba(244, 114, 182, 0.14);
+}
+
+.theme-cute .question-text {
+  color: #4a154b;
+  font-weight: 800;
+}
+
+.theme-cute .answered-counter {
+  background: #fce7f3;
+  border: 1.5px solid #f472b6;
+  color: #be185d;
+  font-weight: 800;
+}
+
+/* 4 Nút đáp án Kẹo Ngọt 3D nổi khối theo 4 hương vị */
+.theme-cute .option-card {
+  border-radius: 18px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.theme-cute .option-card-a {
+  background: #fff0f6;
+  border: 2.5px solid #fb7185;
+  box-shadow: 0 5px 0 #fda4af;
+}
+
+.theme-cute .option-card-b {
+  background: #fefce8;
+  border: 2.5px solid #fbbf24;
+  box-shadow: 0 5px 0 #fcd34d;
+}
+
+.theme-cute .option-card-c {
+  background: #faf5ff;
+  border: 2.5px solid #c084fc;
+  box-shadow: 0 5px 0 #d8b4fe;
+}
+
+.theme-cute .option-card-d {
+  background: #ecfdf5;
+  border: 2.5px solid #34d399;
+  box-shadow: 0 5px 0 #6ee7b7;
+}
+
+.theme-cute .option-card-a .option-key {
+  background: #fb7185;
+  border-color: #f43f5e;
+  color: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 3px 0 #e11d48;
+}
+
+.theme-cute .option-card-b .option-key {
+  background: #f59e0b;
+  border-color: #d97706;
+  color: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 3px 0 #b45309;
+}
+
+.theme-cute .option-card-c .option-key {
+  background: #a855f7;
+  border-color: #9333ea;
+  color: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 3px 0 #7e22ce;
+}
+
+.theme-cute .option-card-d .option-key {
+  background: #10b981;
+  border-color: #059669;
+  color: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 3px 0 #047857;
+}
+
+.theme-cute .option-text {
+  color: #3b0764;
+  font-weight: 800;
+}
+
+.theme-cute .option-correct {
+  background: #d1fae5 !important;
+  border-color: #059669 !important;
+  box-shadow: 0 5px 0 #10b981 !important;
+}
+
+.theme-cute .option-votes {
+  background: #ffffff;
+  border: 1.5px solid #e9d5ff;
+  color: #6b21a8;
+  font-weight: 800;
+}
+
+.theme-cute .explanation-box {
+  background: #f0fdf4;
+  border: 2px solid #34d399;
+  border-radius: 16px;
+}
+
+.theme-cute .explanation-content h3 {
+  color: #047857;
+}
+
+.theme-cute .explanation-content p {
+  color: #064e3b;
+  font-weight: 700;
+}
+
+.theme-cute .fastest-box h4,
+.theme-cute .fastest-pts,
+.theme-cute .reveal-stat {
+  color: #d97706;
+}
+
+.theme-cute .fastest-item span:first-child {
+  color: #4a154b;
+  font-weight: 700;
+}
+
+.theme-cute .sidebar-card {
+  background: rgba(255, 255, 255, 0.9);
+  border: 2.5px solid #ff85b3;
+  border-radius: 22px;
+  box-shadow: 0 6px 0 #ff9ec4, 0 10px 24px rgba(255, 71, 133, 0.12);
+}
+
+.theme-cute .sidebar-header h3 {
+  color: #9d174d;
+  font-size: 0.9rem;
+}
+
+.theme-cute .mini-lb-item,
+.theme-cute .stage-lb-row,
+.theme-cute .podium-card {
+  background: #fff5f9;
+  border: 2px solid #fbcfe8;
+  border-radius: 14px;
+}
+
+.theme-cute .mini-user strong,
+.theme-cute .lb-player-info strong,
+.theme-cute .podium-name {
+  color: #4a154b;
+  font-weight: 800;
+}
+
+.theme-cute .mini-score,
+.theme-cute .lb-total-score {
+  color: #e11d48;
+  font-weight: 900;
+}
+
+.theme-cute .sidebar-empty {
+  color: #9d174d;
+  font-weight: 600;
+}
+
+/* -------------------------------------------------------------------
+   2. THEME HIỆN ĐẠI - AURORA GLASS (MODERN AURORA)
+   Font: Plus Jakarta Sans (Hiện đại, sắc nét chuẩn UI Apple/Spotify)
+   Tông màu: Cực quang Indigo - Xanh Ngọc Lam - Tím Hồng Kính Mờ
+   ------------------------------------------------------------------- */
+.theme-modern {
+  font-family: 'Plus Jakarta Sans', 'Be Vietnam Pro', sans-serif;
+  background:
+    radial-gradient(circle at 15% 15%, rgba(56, 189, 248, 0.35) 0%, transparent 45%),
+    radial-gradient(circle at 85% 20%, rgba(236, 72, 153, 0.32) 0%, transparent 45%),
+    radial-gradient(circle at 50% 85%, rgba(99, 102, 241, 0.38) 0%, transparent 50%),
+    linear-gradient(160deg, #0b132b 0%, #1c2541 50%, #0f172a 100%) !important;
+  --accent-cyan: #38bdf8;
+  --accent-gold: #fbbf24;
+  --accent-purple: #818cf8;
+}
+
+.theme-modern .stage-title,
+.theme-modern .waiting-headline,
+.theme-modern .question-text {
+  font-family: 'Plus Jakarta Sans', 'Be Vietnam Pro', sans-serif;
+  letter-spacing: -0.015em;
+}
+
+.theme-modern .stage-header {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+}
+
+.theme-modern .live-indicator {
+  background: linear-gradient(135deg, #06b6d4, #6366f1);
+  border: none;
+  color: #ffffff;
+}
+
+.theme-modern .pulse-dot {
+  background: #38bdf8;
+  box-shadow: 0 0 8px #38bdf8;
+}
+
+.theme-modern .metric-pill {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #f8fafc;
+}
+
+.theme-modern .center-stage-area {
+  background: rgba(15, 23, 42, 0.68);
+  backdrop-filter: blur(24px);
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  border-radius: 24px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.theme-modern .waiting-headline {
+  background: linear-gradient(90deg, #ffffff 0%, #bae6fd 50%, #f5d0fe 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.theme-modern .rule-item {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 16px;
+}
+
+.theme-modern .waiting-players-box {
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 16px;
+}
+
+.theme-modern .question-prompt-box {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.85) 0%, rgba(15, 23, 42, 0.85) 100%);
+  border: 1.5px solid rgba(56, 189, 248, 0.35);
+  border-radius: 20px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+}
+
+.theme-modern .timer-fill {
+  background: linear-gradient(90deg, #06b6d4, #8b5cf6, #ec4899);
+}
+
+.theme-modern .option-card {
+  background: rgba(30, 41, 59, 0.75);
+  backdrop-filter: blur(12px);
+  border: 1.5px solid rgba(255, 255, 255, 0.16);
+  border-radius: 16px;
+  transition: all 0.2s ease;
+}
+
+.theme-modern .option-card-a .option-key {
+  background: linear-gradient(135deg, #0ea5e9, #2563eb);
+  border: none;
+  color: #ffffff;
+  border-radius: 12px;
+}
+
+.theme-modern .option-card-b .option-key {
+  background: linear-gradient(135deg, #f59e0b, #ea580c);
+  border: none;
+  color: #ffffff;
+  border-radius: 12px;
+}
+
+.theme-modern .option-card-c .option-key {
+  background: linear-gradient(135deg, #8b5cf6, #d946ef);
+  border: none;
+  color: #ffffff;
+  border-radius: 12px;
+}
+
+.theme-modern .option-card-d .option-key {
+  background: linear-gradient(135deg, #10b981, #0d9488);
+  border: none;
+  color: #ffffff;
+  border-radius: 12px;
+}
+
+.theme-modern .sidebar-card {
+  background: rgba(15, 23, 42, 0.68);
+  backdrop-filter: blur(20px);
+  border: 1.5px solid rgba(255, 255, 255, 0.16);
+  border-radius: 20px;
+}
+
+.theme-modern .mini-lb-item {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+}
+
+/* -------------------------------------------------------------------
+   3. THEME CYBER ESPORT - NEON GAMING (GALAXY / CYBER)
+   Font: Chakra Petch (Góc cạnh thể thao điện tử Sci-Fi Esport)
+   Tông màu: Đen Vũ Trụ - Xanh Lục Bảo Neon (#00f5d4) - Hồng Tia Chớp (#f72585)
+   ------------------------------------------------------------------- */
+.theme-galaxy {
+  font-family: 'Chakra Petch', 'Be Vietnam Pro', sans-serif;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(247, 37, 133, 0.24) 0%, transparent 50%),
+    radial-gradient(circle at 50% 100%, rgba(0, 245, 212, 0.2) 0%, transparent 50%),
+    linear-gradient(180deg, #050511 0%, #0a0924 55%, #04030f 100%) !important;
+  --accent-cyan: #00f5d4;
+  --accent-gold: #fee440;
+  --accent-purple: #f72585;
+}
+
+.theme-galaxy .stage-title,
+.theme-galaxy .waiting-headline,
+.theme-galaxy .question-text,
+.theme-galaxy .option-key,
+.theme-galaxy .countdown-clock,
+.theme-galaxy .option-text,
+.theme-galaxy .sidebar-header h3 {
+  font-family: 'Chakra Petch', 'Be Vietnam Pro', sans-serif;
+  letter-spacing: 0.02em;
+}
+
+.theme-galaxy .stage-header {
+  background: rgba(9, 11, 32, 0.95);
+  border: 1.5px solid #00f5d4;
+  border-radius: 6px;
+  box-shadow: 0 0 18px rgba(0, 245, 212, 0.28), inset 0 0 12px rgba(0, 245, 212, 0.1);
+}
+
+.theme-galaxy .center-stage-area {
+  background: rgba(8, 10, 28, 0.92);
+  border: 2px solid #00f5d4;
+  border-radius: 10px;
+  box-shadow: 0 0 30px rgba(0, 245, 212, 0.2), inset 0 0 25px rgba(247, 37, 133, 0.08);
+}
+
+.theme-galaxy .waiting-headline {
+  color: #00f5d4;
+  text-transform: uppercase;
+  text-shadow: 0 0 14px rgba(0, 245, 212, 0.55);
+}
+
+.theme-galaxy .question-prompt-box {
+  background: rgba(14, 17, 48, 0.96);
+  border: 1.5px solid #f72585;
+  border-radius: 8px;
+  box-shadow: 0 0 22px rgba(247, 37, 133, 0.25);
+}
+
+.theme-galaxy .option-card {
+  background: rgba(12, 16, 44, 0.95);
+  border: 1.5px solid rgba(0, 245, 212, 0.45);
+  border-radius: 6px;
+  box-shadow: inset 0 0 10px rgba(0, 245, 212, 0.08);
+}
+
+.theme-galaxy .option-key {
+  border-radius: 4px;
+}
+
+.theme-galaxy .timer-fill {
+  background: linear-gradient(90deg, #00f5d4, #f72585);
+  box-shadow: 0 0 12px #00f5d4;
+}
+
+.theme-galaxy .sidebar-card {
+  background: rgba(8, 10, 28, 0.92);
+  border: 1.5px solid rgba(247, 37, 133, 0.55);
+  border-radius: 8px;
+  box-shadow: 0 0 20px rgba(247, 37, 133, 0.18);
+}
+
+/* -------------------------------------------------------------------
+   4. THEME HOÀNG GIA - VÀNG KIM 24K (ROYAL LUXURY GOLD)
+   Font: Montserrat (Đẳng cấp, sang trọng chuẩn Giải Đấu Vô Địch)
+   Tông màu: Đỏ Rượu Vang / Đen Obsidian - Vàng Kim 24K (#fbbf24)
+   ------------------------------------------------------------------- */
+.theme-luxury {
+  font-family: 'Montserrat', 'Be Vietnam Pro', sans-serif;
+  background:
+    radial-gradient(circle at 50% 15%, rgba(245, 158, 11, 0.28) 0%, transparent 50%),
+    linear-gradient(165deg, #271203 0%, #140802 55%, #090300 100%) !important;
+  --accent-cyan: #fbbf24;
+  --accent-gold: #fde047;
+  --accent-purple: #f59e0b;
+  --text-secondary: #fde68a;
+}
+
+.theme-luxury .stage-title,
+.theme-luxury .waiting-headline,
+.theme-luxury .question-text,
+.theme-luxury .option-key,
+.theme-luxury .countdown-clock,
+.theme-luxury .sidebar-header h3 {
+  font-family: 'Montserrat', 'Be Vietnam Pro', sans-serif;
+  letter-spacing: 0.02em;
+}
+
+.theme-luxury .stage-header {
+  background: linear-gradient(90deg, rgba(45, 24, 5, 0.95) 0%, rgba(28, 14, 3, 0.95) 100%);
+  border: 1.5px solid #fbbf24;
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(251, 191, 36, 0.22);
+}
+
+.theme-luxury .live-indicator {
+  background: linear-gradient(135deg, #b45309, #f59e0b);
+  border-color: #fde68a;
+  color: #ffffff;
+}
+
+.theme-luxury .metric-pill {
+  background: rgba(66, 32, 6, 0.9);
+  border: 1px solid rgba(251, 191, 36, 0.5);
+  color: #fef08a;
+}
+
+.theme-luxury .center-stage-area {
+  background: linear-gradient(180deg, rgba(36, 18, 4, 0.94) 0%, rgba(18, 9, 2, 0.96) 100%);
+  border: 2px solid #fbbf24;
+  border-radius: 16px;
+  box-shadow: 0 0 40px rgba(251, 191, 36, 0.18), 0 20px 50px rgba(0, 0, 0, 0.85);
+}
+
+.theme-luxury .trophy-emblem {
+  background: linear-gradient(135deg, #f59e0b, #fbbf24);
+  border: 2px solid #fef08a;
+  color: #1c0d02;
+  box-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
+}
+
+.theme-luxury .waiting-headline {
+  background: linear-gradient(180deg, #ffffff 0%, #fde047 60%, #f59e0b 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-transform: uppercase;
+}
+
+.theme-luxury .rule-item {
+  background: rgba(54, 27, 6, 0.8);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+}
+
+.theme-luxury .waiting-players-box {
+  background: rgba(24, 11, 2, 0.85);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+}
+
+.theme-luxury .player-chip {
+  background: rgba(251, 191, 36, 0.15);
+  border: 1px solid rgba(251, 191, 36, 0.5);
+  color: #fef08a;
+}
+
+.theme-luxury .question-prompt-box {
+  background: linear-gradient(180deg, rgba(56, 29, 6, 0.96) 0%, rgba(33, 16, 3, 0.96) 100%);
+  border: 2px solid #fbbf24;
+  border-radius: 14px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6), inset 0 0 18px rgba(251, 191, 36, 0.12);
+}
+
+.theme-luxury .timer-fill {
+  background: linear-gradient(90deg, #b45309, #fbbf24, #fef08a);
+}
+
+.theme-luxury .option-card {
+  background: linear-gradient(90deg, rgba(46, 23, 5, 0.95) 0%, rgba(30, 15, 3, 0.95) 100%);
+  border: 1.5px solid rgba(251, 191, 36, 0.5);
+  border-radius: 12px;
+}
+
+.theme-luxury .option-key {
+  background: linear-gradient(135deg, #f59e0b, #fbbf24) !important;
+  border: 1px solid #fef08a !important;
+  color: #1c0d02 !important;
+  font-weight: 900;
+}
+
+.theme-luxury .sidebar-card {
+  background: linear-gradient(180deg, rgba(36, 18, 4, 0.94) 0%, rgba(18, 9, 2, 0.96) 100%);
+  border: 1.5px solid #fbbf24;
+  border-radius: 14px;
+}
+
+.theme-luxury .mini-lb-item {
+  background: rgba(56, 29, 6, 0.75);
+  border: 1px solid rgba(251, 191, 36, 0.28);
 }
 </style>

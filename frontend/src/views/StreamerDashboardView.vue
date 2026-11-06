@@ -227,35 +227,86 @@
             </div>
           </div>
 
-          <!-- Bộ chỉnh khớp khung hình TikTok Điện thoại Real-time -->
+          <!-- Bộ Chọn Theme Phong Cách (Dễ thương, Hiện đại, Vũ trụ, Hoàng gia) -->
           <div class="calib-dashboard-box tabular-nums" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-subtle);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem;">
               <strong style="color: var(--accent-cyan); font-size: 0.92rem;">
-                🎛️ Khung TikTok Điện Thoại ({{ dashLayoutCalib.frameWidth }} × {{ dashLayoutCalib.frameHeight }} px)
+                🎨 Phong Cách Giao Diện OBS Live (Theme)
               </strong>
-              <button type="button" class="btn btn-secondary" style="padding: 0.25rem 0.65rem; font-size: 0.78rem;" @click="applyDashLayoutPreset('362x444')">
-                Chuẩn 362×444
+              <span class="badge badge-purple" style="font-size: 0.76rem; text-transform: uppercase;">
+                {{ dashTheme === 'cute' ? '🌸 Dễ Thương' : dashTheme === 'modern' ? '⚡ Hiện Đại' : dashTheme === 'luxury' ? '👑 Hoàng Gia' : '🌌 Vũ Trụ' }}
+              </span>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; margin-bottom: 1.25rem;">
+              <button
+                type="button"
+                class="btn"
+                :class="dashTheme === 'cute' ? 'btn-cyan' : 'btn-secondary'"
+                style="padding: 0.5rem 0.4rem; font-size: 0.78rem; justify-content: center; flex-direction: column; gap: 0.15rem;"
+                @click="setDashTheme('cute')"
+              >
+                <span style="font-size: 1.15rem;">🌸</span>
+                <strong>Dễ Thương</strong>
+                <small style="font-size: 0.64rem; opacity: 0.75;">Pastel Kẹo Ngọt</small>
               </button>
+
+              <button
+                type="button"
+                class="btn"
+                :class="dashTheme === 'modern' ? 'btn-cyan' : 'btn-secondary'"
+                style="padding: 0.5rem 0.4rem; font-size: 0.78rem; justify-content: center; flex-direction: column; gap: 0.15rem;"
+                @click="setDashTheme('modern')"
+              >
+                <span style="font-size: 1.15rem;">⚡</span>
+                <strong>Hiện Đại</strong>
+                <small style="font-size: 0.64rem; opacity: 0.75;">Cyber Neon</small>
+              </button>
+
+              <button
+                type="button"
+                class="btn"
+                :class="dashTheme === 'galaxy' ? 'btn-cyan' : 'btn-secondary'"
+                style="padding: 0.5rem 0.4rem; font-size: 0.78rem; justify-content: center; flex-direction: column; gap: 0.15rem;"
+                @click="setDashTheme('galaxy')"
+              >
+                <span style="font-size: 1.15rem;">🌌</span>
+                <strong>Vũ Trụ</strong>
+                <small style="font-size: 0.64rem; opacity: 0.75;">Deep Stars</small>
+              </button>
+
+              <button
+                type="button"
+                class="btn"
+                :class="dashTheme === 'luxury' ? 'btn-cyan' : 'btn-secondary'"
+                style="padding: 0.5rem 0.4rem; font-size: 0.78rem; justify-content: center; flex-direction: column; gap: 0.15rem;"
+                @click="setDashTheme('luxury')"
+              >
+                <span style="font-size: 1.15rem;">👑</span>
+                <strong>Hoàng Gia</strong>
+                <small style="font-size: 0.64rem; opacity: 0.75;">Royal Gold</small>
+              </button>
+            </div>
+
+            <!-- Bộ chỉnh khớp khung hình TikTok Điện thoại Real-time -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem;">
+              <strong style="color: var(--accent-gold); font-size: 0.92rem;">
+                📱 Khung Hình TikTok Điện Thoại
+              </strong>
+              <span class="badge badge-cyan" style="font-size: 0.76rem;">
+                {{ dashLayoutCalib.preset === 'fullscreen' ? 'Full Màn Hình' : dashLayoutCalib.preset === 'tiktok-safe-zone' ? 'Vùng An Toàn (160/262)' : `${dashLayoutCalib.frameWidth}×${dashLayoutCalib.frameHeight}` }}
+              </span>
             </div>
 
             <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-bottom: 0.85rem;">
               <button
                 type="button"
                 class="btn"
-                :class="dashLayoutCalib.preset === '362x444' ? 'btn-cyan' : 'btn-secondary'"
+                :class="dashLayoutCalib.preset === 'fullscreen' ? 'btn-cyan' : 'btn-secondary'"
                 style="padding: 0.45rem 0.5rem; font-size: 0.78rem; justify-content: center;"
-                @click="applyDashLayoutPreset('362x444')"
+                @click="applyDashLayoutPreset('fullscreen')"
               >
-                📱 Chuẩn 362 × 444 px
-              </button>
-              <button
-                type="button"
-                class="btn"
-                :class="dashLayoutCalib.preset === 'tiktok-narrow' ? 'btn-cyan' : 'btn-secondary'"
-                style="padding: 0.45rem 0.5rem; font-size: 0.78rem; justify-content: center;"
-                @click="applyDashLayoutPreset('tiktok-narrow')"
-              >
-                📐 Nhỏ gọn (320 × 400)
+                📱 Full Màn Hình (100%)
               </button>
               <button
                 type="button"
@@ -264,7 +315,16 @@
                 style="padding: 0.45rem 0.5rem; font-size: 0.78rem; justify-content: center;"
                 @click="applyDashLayoutPreset('tiktok-safe-zone')"
               >
-                💬 Đẩy lên né Chat đáy
+                🎯 Vùng An Toàn (160/262)
+              </button>
+              <button
+                type="button"
+                class="btn"
+                :class="dashLayoutCalib.preset === '362x444' ? 'btn-cyan' : 'btn-secondary'"
+                style="padding: 0.45rem 0.5rem; font-size: 0.78rem; justify-content: center;"
+                @click="applyDashLayoutPreset('362x444')"
+              >
+                📦 Khung 362 × 444
               </button>
             </div>
 
@@ -602,30 +662,61 @@ const simUser = reactive({
   username: 'minhanh_99',
 });
 
-const STORAGE_CALIB_KEY = 'kb_vertical_layout_362x444_v3';
+const dashTheme = ref<'cute' | 'modern' | 'galaxy' | 'luxury'>('cute');
+
+function setDashTheme(th: 'cute' | 'modern' | 'galaxy' | 'luxury') {
+  dashTheme.value = th;
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem('kb_selected_theme_v2', th);
+    } catch {}
+  }
+  socket?.emit('layout.update', {
+    roomCode: roomCode.value,
+    ...dashLayoutCalib,
+    theme: th,
+  });
+  const names = {
+    cute: '🌸 DỄ THƯƠNG',
+    modern: '⚡ HIỆN ĐẠI',
+    galaxy: '🌌 VŨ TRỤ',
+    luxury: '👑 HOÀNG GIA',
+  };
+  showToast(`Đã chuyển phong cách giao diện OBS sang: ${names[th]}!`, 'success');
+}
+
+const STORAGE_CALIB_KEY = 'kb_vertical_layout_v5';
 const dashLayoutCalib = reactive({
-  frameWidth: 362,
-  frameHeight: 444,
+  frameWidth: 1080,
+  frameHeight: 1920,
   scale: 100,
-  widthPercent: 96,
+  widthPercent: 100,
   offsetX: 0,
   offsetY: 0,
-  preset: '362x444',
+  paddingTop: 160,
+  paddingBottom: 262,
+  preset: 'fullscreen',
 });
 
 function loadDashSavedCalib() {
   if (typeof window === 'undefined') return;
   try {
+    const savedTheme = window.localStorage.getItem('kb_selected_theme_v2');
+    if (savedTheme && ['cute', 'modern', 'galaxy', 'luxury'].includes(savedTheme)) {
+      dashTheme.value = savedTheme as any;
+    }
     const raw = window.localStorage.getItem(STORAGE_CALIB_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      dashLayoutCalib.frameWidth = Number(parsed.frameWidth ?? 362);
-      dashLayoutCalib.frameHeight = Number(parsed.frameHeight ?? 444);
+      dashLayoutCalib.frameWidth = Number(parsed.frameWidth ?? 1080);
+      dashLayoutCalib.frameHeight = Number(parsed.frameHeight ?? 1920);
       dashLayoutCalib.scale = Number(parsed.scale ?? 100);
-      dashLayoutCalib.widthPercent = Number(parsed.widthPercent ?? 96);
+      dashLayoutCalib.widthPercent = Number(parsed.widthPercent ?? 100);
       dashLayoutCalib.offsetX = Number(parsed.offsetX ?? 0);
       dashLayoutCalib.offsetY = Number(parsed.offsetY ?? 0);
-      dashLayoutCalib.preset = String(parsed.preset || '362x444');
+      dashLayoutCalib.paddingTop = Number(parsed.paddingTop ?? 160);
+      dashLayoutCalib.paddingBottom = Number(parsed.paddingBottom ?? 262);
+      dashLayoutCalib.preset = String(parsed.preset || 'fullscreen');
     }
   } catch {
     // ignore
@@ -640,7 +731,10 @@ function broadcastDashCalib() {
     widthPercent: dashLayoutCalib.widthPercent,
     offsetX: dashLayoutCalib.offsetX,
     offsetY: dashLayoutCalib.offsetY,
+    paddingTop: dashLayoutCalib.paddingTop,
+    paddingBottom: dashLayoutCalib.paddingBottom,
     preset: dashLayoutCalib.preset,
+    theme: dashTheme.value,
   };
   if (typeof window !== 'undefined') {
     try {
@@ -655,34 +749,42 @@ function broadcastDashCalib() {
   });
 }
 
-function applyDashLayoutPreset(preset: '362x444' | 'tiktok-narrow' | 'tiktok-safe-zone') {
-  if (preset === '362x444') {
-    dashLayoutCalib.frameWidth = 362;
-    dashLayoutCalib.frameHeight = 444;
+function applyDashLayoutPreset(preset: 'fullscreen' | 'tiktok-safe-zone' | '362x444') {
+  if (preset === 'fullscreen') {
+    dashLayoutCalib.frameWidth = 1080;
+    dashLayoutCalib.frameHeight = 1920;
     dashLayoutCalib.scale = 100;
-    dashLayoutCalib.widthPercent = 96;
+    dashLayoutCalib.widthPercent = 100;
     dashLayoutCalib.offsetX = 0;
     dashLayoutCalib.offsetY = 0;
-    dashLayoutCalib.preset = '362x444';
-  } else if (preset === 'tiktok-narrow') {
-    dashLayoutCalib.frameWidth = 320;
-    dashLayoutCalib.frameHeight = 400;
-    dashLayoutCalib.scale = 100;
-    dashLayoutCalib.widthPercent = 90;
-    dashLayoutCalib.offsetX = 0;
-    dashLayoutCalib.offsetY = 0;
-    dashLayoutCalib.preset = 'tiktok-narrow';
+    dashLayoutCalib.paddingTop = 12;
+    dashLayoutCalib.paddingBottom = 16;
+    dashLayoutCalib.preset = 'fullscreen';
+    showToast('Đã áp dụng Full Màn Hình TikTok (100% Tràn viền)!', 'success');
   } else if (preset === 'tiktok-safe-zone') {
+    dashLayoutCalib.frameWidth = 1080;
+    dashLayoutCalib.frameHeight = 1920;
+    dashLayoutCalib.scale = 100;
+    dashLayoutCalib.widthPercent = 100;
+    dashLayoutCalib.offsetX = 0;
+    dashLayoutCalib.offsetY = 0;
+    dashLayoutCalib.paddingTop = 160;
+    dashLayoutCalib.paddingBottom = 262;
+    dashLayoutCalib.preset = 'tiktok-safe-zone';
+    showToast('Đã áp dụng Vùng An Toàn TikTok (Né 160px trên / 262px dưới)!', 'success');
+  } else if (preset === '362x444') {
     dashLayoutCalib.frameWidth = 362;
     dashLayoutCalib.frameHeight = 444;
-    dashLayoutCalib.scale = 96;
+    dashLayoutCalib.scale = 100;
     dashLayoutCalib.widthPercent = 96;
     dashLayoutCalib.offsetX = 0;
-    dashLayoutCalib.offsetY = -8;
-    dashLayoutCalib.preset = 'tiktok-safe-zone';
+    dashLayoutCalib.offsetY = 0;
+    dashLayoutCalib.paddingTop = 0;
+    dashLayoutCalib.paddingBottom = 0;
+    dashLayoutCalib.preset = '362x444';
+    showToast('Đã áp dụng Khung Chuẩn 362×444 px!', 'success');
   }
   broadcastDashCalib();
-  showToast('Đã cập nhật khung hình TikTok Điện thoại (362×444) ngay lập tức!', 'success');
 }
 
 function emitDashLayoutChange() {
@@ -955,12 +1057,17 @@ onMounted(async () => {
 
   socket.on('layout.config', (cfg) => {
     if (!cfg) return;
-    dashLayoutCalib.frameWidth = Number(cfg.frameWidth ?? dashLayoutCalib.frameWidth ?? 362);
-    dashLayoutCalib.frameHeight = Number(cfg.frameHeight ?? dashLayoutCalib.frameHeight ?? 444);
+    if (cfg.theme && ['cute', 'modern', 'galaxy', 'luxury'].includes(cfg.theme)) {
+      dashTheme.value = cfg.theme as any;
+    }
+    dashLayoutCalib.frameWidth = Number(cfg.frameWidth ?? dashLayoutCalib.frameWidth ?? 1080);
+    dashLayoutCalib.frameHeight = Number(cfg.frameHeight ?? dashLayoutCalib.frameHeight ?? 1920);
     dashLayoutCalib.scale = Number(cfg.scale ?? dashLayoutCalib.scale);
     dashLayoutCalib.widthPercent = Number(cfg.widthPercent ?? dashLayoutCalib.widthPercent);
     dashLayoutCalib.offsetX = Number(cfg.offsetX ?? dashLayoutCalib.offsetX);
     dashLayoutCalib.offsetY = Number(cfg.offsetY ?? dashLayoutCalib.offsetY);
+    dashLayoutCalib.paddingTop = Number(cfg.paddingTop ?? dashLayoutCalib.paddingTop ?? 160);
+    dashLayoutCalib.paddingBottom = Number(cfg.paddingBottom ?? dashLayoutCalib.paddingBottom ?? 262);
     dashLayoutCalib.preset = String(cfg.preset || dashLayoutCalib.preset);
   });
 });

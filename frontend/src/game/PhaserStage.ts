@@ -29,9 +29,10 @@ class StageScene extends Phaser.Scene {
   private ambientParticles: FloatingParticle[] = [];
   private burstParticles: BurstParticle[] = [];
   private elapsed = 0;
-  private primaryColor = 0x00f0ff;
-  private secondaryColor = 0x9333ea;
+  private primaryColor = 0xff75a0;
+  private secondaryColor = 0xa855f7;
   private spotlightIntensity = 0.14;
+  private visualStyle: 'cute' | 'modern' | 'galaxy' | 'luxury' = 'cute';
 
   constructor() {
     super({ key: 'StageScene' });
@@ -39,22 +40,63 @@ class StageScene extends Phaser.Scene {
 
   create() {
     this.graphics = this.add.graphics();
-    const w = this.scale.width;
-    const h = this.scale.height;
-
-    this.ambientParticles = Array.from({ length: 42 }, () => ({
-      x: Math.random() * w,
-      y: Math.random() * h,
-      vx: (Math.random() - 0.5) * 0.35,
-      vy: -0.25 - Math.random() * 0.45,
-      radius: 1.5 + Math.random() * 2.8,
-      alpha: 0.15 + Math.random() * 0.4,
-      color: Math.random() > 0.45 ? 0x00f0ff : 0xc084fc,
-    }));
+    this.rebuildAmbientParticles();
 
     this.scale.on('resize', () => {
       // Responsive stage resize
     });
+  }
+
+  private getStylePalette(): number[] {
+    if (this.visualStyle === 'cute') {
+      return [0xff6b9d, 0xc084fc, 0x38bdf8, 0xfbbf24, 0x34d399];
+    }
+    if (this.visualStyle === 'modern') {
+      return [0x38bdf8, 0x818cf8, 0xf472b6, 0x2dd4bf, 0xfacc15];
+    }
+    if (this.visualStyle === 'luxury') {
+      return [0xfacc15, 0xfbbf24, 0xf59e0b, 0xfef08a, 0x38bdf8];
+    }
+    return [0x00f0ff, 0xc084fc, 0xfacc15, 0x34d399, 0xfb7185];
+  }
+
+  private rebuildAmbientParticles() {
+    const w = this.scale?.width || 1080;
+    const h = this.scale?.height || 1920;
+    const palette = this.getStylePalette();
+    const isCute = this.visualStyle === 'cute';
+
+    this.ambientParticles = Array.from({ length: isCute ? 36 : 42 }, (_, idx) => ({
+      x: Math.random() * w,
+      y: Math.random() * h,
+      vx: (Math.random() - 0.5) * 0.35,
+      vy: -0.25 - Math.random() * 0.45,
+      radius: isCute ? 3 + Math.random() * 5 : 1.5 + Math.random() * 2.8,
+      alpha: isCute ? 0.18 + Math.random() * 0.28 : 0.15 + Math.random() * 0.4,
+      color: palette[idx % palette.length],
+    }));
+  }
+
+  public setVisualStyle(style: 'cute' | 'modern' | 'galaxy' | 'luxury') {
+    this.visualStyle = style;
+    if (style === 'cute') {
+      this.primaryColor = 0xff75a0;
+      this.secondaryColor = 0xa78bfa;
+      this.spotlightIntensity = 0.11;
+    } else if (style === 'modern') {
+      this.primaryColor = 0x38bdf8;
+      this.secondaryColor = 0x6366f1;
+      this.spotlightIntensity = 0.15;
+    } else if (style === 'luxury') {
+      this.primaryColor = 0xfacc15;
+      this.secondaryColor = 0xd97706;
+      this.spotlightIntensity = 0.16;
+    } else {
+      this.primaryColor = 0x00f0ff;
+      this.secondaryColor = 0x9333ea;
+      this.spotlightIntensity = 0.16;
+    }
+    this.rebuildAmbientParticles();
   }
 
   public setThemeMode(mode: 'WAITING' | 'QUESTION' | 'URGENT' | 'REVEAL' | 'VICTORY') {
@@ -159,12 +201,14 @@ class StageScene extends Phaser.Scene {
     this.graphics.closePath();
     this.graphics.fillPath();
 
-    // 2. Subtle stage horizon lines at the bottom
-    const horizonY = h * 0.82;
-    this.graphics.lineStyle(1, this.primaryColor, 0.12);
-    for (let i = 0; i < 5; i++) {
-      const y = horizonY + i * ((h - horizonY) / 5);
-      this.graphics.lineBetween(0, y, w, y);
+    // 2. Subtle stage horizon lines at the bottom (skip in cute pastel mode)
+    if (this.visualStyle !== 'cute') {
+      const horizonY = h * 0.82;
+      this.graphics.lineStyle(1, this.primaryColor, 0.12);
+      for (let i = 0; i < 5; i++) {
+        const y = horizonY + i * ((h - horizonY) / 5);
+        this.graphics.lineBetween(0, y, w, y);
+      }
     }
 
     // 3. Ambient floating particles
@@ -238,6 +282,10 @@ export class PhaserStageController {
 
   public setMode(mode: 'WAITING' | 'QUESTION' | 'URGENT' | 'REVEAL' | 'VICTORY') {
     this.scene?.setThemeMode(mode);
+  }
+
+  public setVisualStyle(style: 'cute' | 'modern' | 'galaxy' | 'luxury') {
+    this.scene?.setVisualStyle(style);
   }
 
   public triggerFireworks(count = 3) {
