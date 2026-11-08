@@ -22,6 +22,16 @@
     <!-- Floating Quick Calibrator & Theme Toggle (chỉ hiện trên màn hình Game Show độc lập) -->
     <div v-if="!embedded" class="calib-floating-widget" :class="{ 'calib-open': showCalibPanel }">
       <div class="calib-top-actions">
+        <!-- Nút bật/tắt âm thanh nhanh -->
+        <button
+          type="button"
+          class="quick-theme-btn"
+          :title="isSoundMuted ? 'Âm thanh đang tắt (Bấm để bật)' : 'Âm thanh đang bật (Bấm để tắt)'"
+          @click="toggleSoundMute"
+        >
+          <span>{{ isSoundMuted ? '🔇 Tắt tiếng' : '🔊 Âm thanh' }}</span>
+        </button>
+
         <!-- Nút đổi theme nhanh 1 chạm -->
         <button
           type="button"
@@ -451,6 +461,19 @@
                 }"
               >
                 <div class="lb-rank">{{ entry.rank }}</div>
+                <div class="player-avatar avatar-md">
+                  <img
+                    v-if="hasAvatar(entry)"
+                    :src="entry.avatarUrl"
+                    :alt="entry.nickname"
+                    referrerpolicy="no-referrer"
+                    loading="lazy"
+                    @error="markAvatarFailed(entry)"
+                  />
+                  <span v-else :style="{ background: avatarFallbackColor(entry) }">
+                    {{ avatarInitial(entry) }}
+                  </span>
+                </div>
                 <div class="lb-player-info">
                   <strong>{{ entry.nickname }}</strong>
                   <span>Đúng {{ entry.correctCount }} câu</span>
@@ -484,6 +507,19 @@
                 <div class="podium-medal">
                   {{ idx === 0 ? 'QUÁN QUÂN 🏆' : `HẠNG ${idx + 1}` }}
                 </div>
+                <div class="player-avatar avatar-lg podium-avatar">
+                  <img
+                    v-if="hasAvatar(item)"
+                    :src="item.avatarUrl"
+                    :alt="item.nickname"
+                    referrerpolicy="no-referrer"
+                    loading="lazy"
+                    @error="markAvatarFailed(item)"
+                  />
+                  <span v-else :style="{ background: avatarFallbackColor(item) }">
+                    {{ avatarInitial(item) }}
+                  </span>
+                </div>
                 <strong class="podium-name">{{ item.nickname }}</strong>
                 <div class="podium-score">{{ item.totalScore }} điểm</div>
                 <span class="podium-accuracy">Đúng {{ item.correctCount }} câu</span>
@@ -508,6 +544,19 @@
                 class="mini-lb-item"
               >
                 <span class="mini-rank" :class="`rank-${item.rank}`">{{ item.rank }}</span>
+                <div class="player-avatar avatar-sm">
+                  <img
+                    v-if="hasAvatar(item)"
+                    :src="item.avatarUrl"
+                    :alt="item.nickname"
+                    referrerpolicy="no-referrer"
+                    loading="lazy"
+                    @error="markAvatarFailed(item)"
+                  />
+                  <span v-else :style="{ background: avatarFallbackColor(item) }">
+                    {{ avatarInitial(item) }}
+                  </span>
+                </div>
                 <div class="mini-user">
                   <strong>{{ item.nickname }}</strong>
                 </div>
@@ -543,6 +592,7 @@ import {
 } from 'lucide-vue-next';
 import { api } from '../services/api';
 import { createRoomSocket } from '../services/socket';
+import { soundFX } from '../services/sound';
 import { PhaserStageController } from '../game/PhaserStage';
 import type { Socket } from 'socket.io-client';
 
@@ -888,7 +938,70 @@ const remainingSeconds = ref<number>(15);
 const answeredCount = ref<number>(0);
 const answeredPlayers = ref<Array<{ playerId: string; nickname: string; username: string }>>([]);
 const activeGiftBanner = ref<any>(null);
+const isSoundMuted = ref<boolean>(false);
 let giftTimeout: any = null;
+let lastTickSoundKey = '';
+
+// --- Avatar người chơi trên bảng thành tích ---
+const failedAvatarKeys = ref<Set<string>>(new Set());
+
+function avatarKey(entry: any): string {
+  return String(entry?.playerId || entry?.username || entry?.nickname || '');
+}
+
+function hasAvatar(entry: any): boolean {
+  return Boolean(entry?.avatarUrl) && !failedAvatarKeys.value.has(avatarKey(entry));
+}
+
+function markAvatarFailed(entry: any) {
+  const next = new Set(failedAvatarKeys.value);
+  next.add(avatarKey(entry));
+  failedAvatarKeys.value = next;
+}
+
+function avatarInitial(entry: any): string {
+  const name = String(entry?.nickname || entry?.username || '?').trim();
+  return (Array.from(name)[0] || '?').toUpperCase();
+}
+
+const AVATAR_FALLBACK_COLORS = [
+  'linear-gradient(135deg, #ff6b9d, #c084fc)',
+  'linear-gradient(135deg, #38bdf8, #6366f1)',
+  'linear-gradient(135deg, #34d399, #0ea5e9)',
+  'linear-gradient(135deg, #fbbf24, #f97316)',
+  'linear-gradient(135deg, #f43f5e, #a855f7)',
+  'linear-gradient(135deg, #2dd4bf, #84cc16)',
+];
+
+function avatarFallbackColor(entry: any): string {
+  const key = avatarKey(entry);
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) {
+    hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  }
+  return AVATAR_FALLBACK_COLORS[hash % AVATAR_FALLBACK_COLORS.length];
+}
+
+function loadSavedSoundPref() {
+  if (typeof window === 'undefined') return;
+  try {
+    const key = props.embedded ? 'kb_sound_muted_embed' : 'kb_sound_muted_obs';
+    isSoundMuted.value = window.localStorage.getItem(key) === '1';
+  } catch {}
+}
+
+function toggleSoundMute() {
+  isSoundMuted.value = !isSoundMuted.value;
+  if (typeof window !== 'undefined') {
+    try {
+      const key = props.embedded ? 'kb_sound_muted_embed' : 'kb_sound_muted_obs';
+      window.localStorage.setItem(key, isSoundMuted.value ? '1' : '0');
+    } catch {}
+  }
+  if (!isSoundMuted.value) {
+    soundFX.playCountdownTick(10);
+  }
+}
 
 const currentPhase = computed(() => {
   return roomState.value?.phase || 'WAITING_ROOM';
@@ -1008,6 +1121,7 @@ async function loadInitialRecovery() {
 onMounted(async () => {
   loadSavedTheme();
   loadSavedCalib();
+  loadSavedSoundPref();
   window.addEventListener('resize', handleResize);
   window.addEventListener('storage', handleStorageSync);
   handleResize();
@@ -1047,14 +1161,31 @@ onMounted(async () => {
   socket.on('question.started', (payload) => {
     activeQuestion.value = payload;
     questionResult.value = null;
-    remainingSeconds.value = payload.duration || 15;
+    const initialSec = payload.duration || 15;
+    remainingSeconds.value = initialSec;
     answeredCount.value = 0;
     answeredPlayers.value = [];
+    if (initialSec > 0) {
+      lastTickSoundKey = `${payload.questionId || payload.questionIndex || ''}:${initialSec}`;
+      if (!isSoundMuted.value) {
+        soundFX.playCountdownTick(initialSec);
+      }
+    }
     requestAnimationFrame(recalcAutoFit);
   });
 
   socket.on('question.timer', (payload) => {
-    remainingSeconds.value = payload.remainingSeconds;
+    const nextSec = payload.remainingSeconds;
+    remainingSeconds.value = nextSec;
+    if (currentPhase.value === 'QUESTION' && nextSec > 0) {
+      const tickKey = `${payload.questionId || payload.questionIndex || ''}:${nextSec}`;
+      if (tickKey !== lastTickSoundKey) {
+        lastTickSoundKey = tickKey;
+        if (!isSoundMuted.value) {
+          soundFX.playCountdownTick(nextSec);
+        }
+      }
+    }
   });
 
   socket.on('player.answered', (payload) => {
@@ -1067,6 +1198,9 @@ onMounted(async () => {
 
   socket.on('question.result', (payload) => {
     questionResult.value = payload;
+    if (!isSoundMuted.value && Number(payload?.correctPlayersCount || 0) > 0) {
+      soundFX.playCorrectAnswer();
+    }
     requestAnimationFrame(recalcAutoFit);
   });
 
@@ -2154,6 +2288,86 @@ onBeforeUnmount(() => {
 .lb-top-1 .lb-rank {
   background: var(--accent-gold);
   color: #08090f;
+}
+
+/* Avatar người chơi trên bảng thành tích */
+.player-avatar {
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(142, 164, 210, 0.18);
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.player-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.player-avatar span {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.avatar-sm {
+  width: 24px;
+  height: 24px;
+  border-width: 1.5px;
+}
+
+.avatar-sm span {
+  font-size: 0.7rem;
+}
+
+.avatar-md {
+  width: 34px;
+  height: 34px;
+}
+
+.avatar-md span {
+  font-size: 0.95rem;
+}
+
+.avatar-lg {
+  width: 64px;
+  height: 64px;
+  border-width: 3px;
+}
+
+.avatar-lg span {
+  font-size: 1.6rem;
+}
+
+.podium-avatar {
+  margin: 0.25rem auto 0.15rem;
+}
+
+.lb-top-1 .player-avatar,
+.podium-gold .player-avatar {
+  border-color: var(--accent-gold);
+  box-shadow: 0 0 12px rgba(250, 204, 21, 0.55);
+}
+
+.lb-top-2 .player-avatar,
+.podium-silver .player-avatar {
+  border-color: #e2e8f0;
+}
+
+.lb-top-3 .player-avatar,
+.podium-bronze .player-avatar {
+  border-color: #f59e0b;
 }
 
 .lb-player-info {
