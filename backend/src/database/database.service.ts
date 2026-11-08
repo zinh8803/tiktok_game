@@ -57,9 +57,35 @@ export class DatabaseService implements OnModuleInit {
     const schemaPath = path.join(__dirname, 'mysql-init.sql');
     const schemaSql = fs.readFileSync(schemaPath, 'utf-8');
     this.db.exec(schemaSql);
+    this.ensureGiftRewardColumns();
 
     this.seedIfEmpty();
     this.logger.log(`SQLite Database initialized at ${this.dbPath}`);
+  }
+
+  private ensureGiftRewardColumns() {
+    const columns = this.db
+      .prepare(`PRAGMA table_info(gift_mappings)`)
+      .all() as Array<{ name: string }>;
+    const columnNames = new Set(columns.map((column) => column.name));
+    if (!columnNames.has('reward_type')) {
+      this.db.exec(
+        `ALTER TABLE gift_mappings ADD COLUMN reward_type VARCHAR(32) NOT NULL DEFAULT 'POINTS'`
+      );
+    }
+    if (!columnNames.has('reward_points')) {
+      this.db.exec(
+        `ALTER TABLE gift_mappings ADD COLUMN reward_points INTEGER NOT NULL DEFAULT 100`
+      );
+    }
+    // Preserve the old SHARED_HINT meaning after upgrading an existing database.
+    this.db
+      .prepare(
+        `UPDATE gift_mappings
+         SET reward_type = 'ELIMINATE_WRONG', reward_points = 0
+         WHERE effect_type = 'SHARED_HINT' AND reward_type = 'POINTS'`
+      )
+      .run();
   }
 
   public runInTransaction<T>(fn: () => T): T {
@@ -209,8 +235,9 @@ export class DatabaseService implements OnModuleInit {
 
       // 6. Seed Gift Mappings
       const insertGift = this.db.prepare(`
-        INSERT OR IGNORE INTO gift_mappings (id, gift_id, gift_name, effect_type, display_message, duration_ms, icon, is_active)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+        INSERT OR IGNORE INTO gift_mappings
+          (id, gift_id, gift_name, effect_type, reward_type, reward_points, display_message, duration_ms, icon, is_active)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
       `);
       for (const g of SEED_GIFTS) {
         insertGift.run(
@@ -218,6 +245,8 @@ export class DatabaseService implements OnModuleInit {
           g.giftId,
           g.giftName,
           g.effectType,
+          g.rewardType,
+          g.rewardPoints,
           g.displayMessage,
           g.durationMs,
           g.icon
@@ -1607,6 +1636,22 @@ export class DatabaseService implements OnModuleInit {
     }));
   }
 
+  public addGiftPoints(sessionId: string, playerId: string, points = 100) {
+    if (!Number.isInteger(points) || points <= 0) {
+      throw new Error(`Gift points must be a positive integer: ${points}`);
+    }
+
+    const result = this.db
+      .prepare(`UPDATE game_players SET total_score = total_score + ? WHERE session_id = ? AND id = ?`)
+      .run(points, sessionId, playerId) as { changes?: number };
+
+    if (!result?.changes) {
+      throw new Error(`Player ${playerId} not found in session ${sessionId}`);
+    }
+
+    return points;
+  }
+
   // =====================================================================
   // LIVE EVENTS DEDUPLICATION & GIFT MAPPINGS (Mục 3.3, 3.4, 5.2, 9)
   // =====================================================================
@@ -1662,6 +1707,8 @@ export class DatabaseService implements OnModuleInit {
         displayMessage: row.display_message,
         durationMs: row.duration_ms,
         icon: row.icon,
+        rewardType: row.reward_type || 'POINTS',
+        rewardPoints: row.reward_points ?? 100,
         isActive: Boolean(row.is_active),
       }));
   }
@@ -1671,18 +1718,34 @@ export class DatabaseService implements OnModuleInit {
     giftId: string;
     giftName: string;
     effectType: string;
+    rewardType?: string;
+    rewardPoints?: number;
     displayMessage: string;
     durationMs?: number;
     icon?: string;
   }) {
+    const rewardType = dto.rewardType || 'POINTS';
+    if (!['POINTS', 'ELIMINATE_WRONG', 'NONE'].includes(rewardType)) {
+      throw new Error(`Unsupported gift reward type: ${rewardType}`);
+    }
+    const rewardPoints = rewardType === 'POINTS' ? dto.rewardPoints ?? 100 : 0;
+    if (
+      rewardType === 'POINTS' &&
+      (!Number.isInteger(rewardPoints) || rewardPoints <= 0)
+    ) {
+      throw new Error(`Gift reward points must be a positive integer: ${rewardPoints}`);
+    }
+
     const id = dto.id || `gift-${uuidv4().slice(0, 8)}`;
     this.db
       .prepare(
-        `INSERT INTO gift_mappings (id, gift_id, gift_name, effect_type, display_message, duration_ms, icon, is_active)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+        `INSERT INTO gift_mappings (id, gift_id, gift_name, effect_type, reward_type, reward_points, display_message, duration_ms, icon, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
          ON CONFLICT(gift_id) DO UPDATE SET
            gift_name = excluded.gift_name,
            effect_type = excluded.effect_type,
+           reward_type = excluded.reward_type,
+           reward_points = excluded.reward_points,
            display_message = excluded.display_message,
            duration_ms = excluded.duration_ms,
            icon = excluded.icon`
@@ -1692,6 +1755,8 @@ export class DatabaseService implements OnModuleInit {
         dto.giftId,
         dto.giftName,
         dto.effectType,
+        rewardType,
+        rewardPoints,
         dto.displayMessage,
         dto.durationMs || 4000,
         dto.icon || 'sparkles'

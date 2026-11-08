@@ -1393,6 +1393,8 @@ export const SEED_GIFTS = [
     giftId: '5655', // Rose on TikTok
     giftName: 'Hoa Hồng (Rose)',
     effectType: 'CHEER_BANNER',
+    rewardType: 'POINTS',
+    rewardPoints: 100,
     displayMessage: 'đã gửi Hoa Hồng cổ vũ toàn trường quay!',
     durationMs: 3500,
     icon: 'flower',
@@ -1402,6 +1404,8 @@ export const SEED_GIFTS = [
     giftId: '5269', // TikTok Gift
     giftName: 'Pháo Hoa Sân Khấu',
     effectType: 'FIREWORKS',
+    rewardType: 'POINTS',
+    rewardPoints: 100,
     displayMessage: 'đã kích hoạt Đại Tiệc Pháo Hoa rực rỡ!',
     durationMs: 5000,
     icon: 'sparkles',
@@ -1411,6 +1415,8 @@ export const SEED_GIFTS = [
     giftId: '5879', // Finger Heart / Light
     giftName: 'Ánh Sáng Hào Quang',
     effectType: 'STAGE_LIGHTS',
+    rewardType: 'POINTS',
+    rewardPoints: 100,
     displayMessage: 'đã thắp sáng hiệu ứng sân khấu Game Show!',
     durationMs: 4500,
     icon: 'zap',
@@ -1420,9 +1426,10 @@ export const SEED_GIFTS = [
     giftId: '9999', // Shared Hint Gift
     giftName: 'Ngôi Sao Tri Thức',
     effectType: 'SHARED_HINT',
+    rewardType: 'ELIMINATE_WRONG',
+    rewardPoints: 0,
     displayMessage: 'đã mở Gợi Ý Chung (Loại trừ 1 đáp án sai) cho tất cả người chơi!',
     durationMs: 6000,
     icon: 'lightbulb',
   },
 ];
-

@@ -755,7 +755,7 @@ export class GameEngineService {
 
   /**
    * Xử lý sự kiện Quà tặng TikTok (Mục 3.4 & 7.1)
-   * Chỉ kích hoạt hiệu ứng sân khấu hoặc gợi ý chung cho tất cả người chơi, tuyệt đối không mua điểm
+   * Quà tặng thực hiện hành động đã cấu hình: cộng điểm hoặc loại một đáp án sai.
    */
   public handleGiftEvent(event: GameEvent) {
     const runtime = this.getOrCreateRuntime(event.roomId);
@@ -771,15 +771,41 @@ export class GameEngineService {
         giftId: event.payload.giftId || 'default',
         giftName: event.payload.giftName || 'Quà tặng TikTok',
         effectType: 'FIREWORKS',
+        rewardType: 'POINTS',
+        rewardPoints: 100,
         displayMessage: 'đã gửi quà tặng khuấy động sân khấu!',
         durationMs: 4000,
         icon: 'sparkles',
       };
 
-    // Nếu là hiệu ứng SHARED_HINT (Gợi ý chung cho tất cả người chơi) và câu hỏi đang mở
+      let giftPoints = 0;
+      if (runtime.sessionId) {
+        runtime.playersMap.set(event.user.id, {
+          id: event.user.id,
+          username: event.user.username,
+          nickname: event.user.nickname,
+          avatarUrl: event.user.avatarUrl,
+        });
+        const playerRecord = this.db.upsertPlayer(runtime.sessionId, event.user);
+        if (matched.rewardType !== 'ELIMINATE_WRONG' && matched.rewardType !== 'NONE') {
+          giftPoints = this.db.addGiftPoints(
+            runtime.sessionId,
+            playerRecord.id,
+            matched.rewardPoints ?? 100
+          );
+          runtime.leaderboard = this.db.getSessionLeaderboard(runtime.sessionId);
+          this.realtime.emitToRoom(runtime.roomCode, 'leaderboard.updated', {
+            leaderboard: runtime.leaderboard,
+            questionIndex: runtime.currentQuestionIndex + 1,
+            totalQuestions: runtime.questions.length,
+          });
+        }
+      }
+
+    // SHARED_HINT vẫn được hỗ trợ để tương thích cấu hình cũ.
     let sharedHintEliminated: OptionLabel | null = null;
     if (
-      matched.effectType === 'SHARED_HINT' &&
+      (matched.rewardType === 'ELIMINATE_WRONG' || matched.effectType === 'SHARED_HINT') &&
       runtime.isQuestionOpen &&
       runtime.currentQuestionIndex >= 0
     ) {
@@ -804,6 +830,7 @@ export class GameEngineService {
       durationMs: matched.durationMs,
       icon: matched.icon,
       eliminatedHintOption: sharedHintEliminated,
+      giftPoints,
       receivedAt: event.receivedAt,
     };
 
@@ -817,6 +844,9 @@ export class GameEngineService {
 
     this.realtime.emitToRoom(runtime.roomCode, 'gift.animation', animationPayload);
     if (sharedHintEliminated) {
+      this.emitRoomState(runtime.roomCode);
+    }
+    if (giftPoints > 0) {
       this.emitRoomState(runtime.roomCode);
     }
 
@@ -1057,4 +1087,3 @@ export class GameEngineService {
     };
   }
 }
-

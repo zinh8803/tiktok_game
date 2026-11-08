@@ -323,7 +323,7 @@
       <div class="panel-card">
         <h2>Danh Sách Ánh Xạ Quà Tặng TikTok</h2>
         <p class="panel-sub">
-          Quà tặng chỉ kích hoạt hiệu ứng sân khấu hoặc gợi ý chung cho tất cả người chơi, không mua điểm.
+          Mỗi quà tặng có thể cấu hình cộng điểm hoặc loại một đáp án sai trong câu hỏi đang mở.
         </p>
 
         <div class="gifts-table">
@@ -333,7 +333,12 @@
               <span class="gift-id-tag tabular-nums">Gift ID: {{ g.giftId }}</span>
               <p>{{ g.displayMessage }}</p>
             </div>
-            <span class="badge badge-gold">{{ g.effectType }}</span>
+            <div class="gift-badges">
+              <span class="badge badge-gold">{{ g.effectType }}</span>
+              <span class="badge badge-cyan">
+                {{ g.rewardType === 'ELIMINATE_WRONG' ? 'LOẠI ĐÁP ÁN SAI' : g.rewardType === 'POINTS' ? `+${g.rewardPoints} ĐIỂM` : 'KHÔNG THƯỞNG' }}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -357,6 +362,25 @@
               <option value="CHEER_BANNER">CHEER_BANNER (Lời cổ vũ toàn trường quay)</option>
               <option value="SHARED_HINT">SHARED_HINT (Gợi ý loại 1 đáp án sai cho tất cả)</option>
             </select>
+          </div>
+          <div>
+            <label>Hành động thưởng</label>
+            <select v-model="giftForm.rewardType" class="select-control">
+              <option value="POINTS">Cộng điểm cho người gửi</option>
+              <option value="ELIMINATE_WRONG">Loại 1 đáp án sai cho người chơi</option>
+              <option value="NONE">Chỉ hiệu ứng, không cộng điểm</option>
+            </select>
+          </div>
+          <div v-if="giftForm.rewardType === 'POINTS'">
+            <label>Số điểm cộng</label>
+            <input
+              v-model.number="giftForm.rewardPoints"
+              type="number"
+              min="1"
+              step="1"
+              class="input-control"
+              required
+            />
           </div>
           <div>
             <label>Thông điệp hiển thị trên màn hình</label>
@@ -444,6 +468,8 @@ const giftForm = reactive({
   giftId: '',
   giftName: '',
   effectType: 'FIREWORKS',
+  rewardType: 'POINTS',
+  rewardPoints: 100,
   displayMessage: 'đã khuấy động sân khấu bằng quà tặng đặc biệt!',
 });
 
@@ -586,6 +612,8 @@ async function saveGiftMapping() {
   statusNotice.value = `Đã lưu cấu hình quà tặng ${giftForm.giftName}`;
   giftForm.giftId = '';
   giftForm.giftName = '';
+  giftForm.rewardType = 'POINTS';
+  giftForm.rewardPoints = 100;
 }
 
 onMounted(() => {
@@ -902,4 +930,3 @@ onMounted(() => {
   }
 }
 </style>
-

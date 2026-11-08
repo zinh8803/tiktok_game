@@ -32,6 +32,8 @@ export type GiftEffectType =
   | 'SHARED_HINT'
   | 'CONFETTI_SHOWER';
 
+export type GiftRewardType = 'POINTS' | 'ELIMINATE_WRONG' | 'NONE';
+
 /**
  * Định dạng sự kiện nội bộ chuẩn hóa (Mục 5.2)
  * Tách biệt hoàn toàn Game Engine khỏi thư viện tiktok-live-connector
@@ -123,4 +125,3 @@ export interface LeaderboardEntry {
   bestStreak: number;
   lastQuestionDelta?: number;
 }
-

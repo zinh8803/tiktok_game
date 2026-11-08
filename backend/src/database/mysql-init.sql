@@ -180,15 +180,16 @@ CREATE TABLE IF NOT EXISTS live_events (
   processed INTEGER NOT NULL DEFAULT 1
 );
 
--- Ánh xạ quà tặng với hiệu ứng giải trí/hỗ trợ chung, không mua điểm (Mục 3.4 & Mục 9)
+-- Ánh xạ quà tặng với hiệu ứng giải trí/hỗ trợ chung và thưởng điểm (Mục 3.4 & Mục 9)
 CREATE TABLE IF NOT EXISTS gift_mappings (
   id VARCHAR(64) PRIMARY KEY,
   gift_id VARCHAR(64) NOT NULL UNIQUE,
   gift_name VARCHAR(150) NOT NULL,
   effect_type VARCHAR(64) NOT NULL, -- 'FIREWORKS' | 'STAGE_LIGHTS' | 'CHEER_BANNER' | 'SHARED_HINT' | 'CONFETTI_SHOWER'
+  reward_type VARCHAR(32) NOT NULL DEFAULT 'POINTS', -- 'POINTS' | 'ELIMINATE_WRONG' | 'NONE'
+  reward_points INTEGER NOT NULL DEFAULT 100,
   display_message VARCHAR(255) NOT NULL,
   duration_ms INTEGER NOT NULL DEFAULT 4000,
   icon VARCHAR(64) NOT NULL DEFAULT 'sparkles',
   is_active INTEGER NOT NULL DEFAULT 1
 );
-

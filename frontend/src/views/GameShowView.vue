@@ -10,6 +10,12 @@
       }
     ]"
   >
+    <div
+      class="question-color-cycle-background"
+      :style="{ background: questionColorCycleBackground }"
+      aria-hidden="true"
+    ></div>
+
     <!-- Phaser 3 Canvas Stage Layer -->
     <div ref="phaserContainer" class="phaser-canvas-layer"></div>
 
@@ -897,6 +903,19 @@ const totalQuestionsCount = computed(() => {
   return activeQuestion.value?.totalQuestions || roomState.value?.totalQuestions || 10;
 });
 
+const questionColorCycleBackground = computed(() => {
+  const cycle = Math.floor(Math.max(0, currentQuestionNumber.value - 1) / 10) % 6;
+  const backgrounds = [
+    'radial-gradient(circle at 18% 16%, rgba(255, 107, 157, 0.42) 0%, transparent 42%), radial-gradient(circle at 82% 84%, rgba(168, 85, 247, 0.36) 0%, transparent 48%), linear-gradient(145deg, #211437 0%, #090c20 72%, #160d2c 100%)',
+    'radial-gradient(circle at 78% 18%, rgba(56, 189, 248, 0.42) 0%, transparent 44%), radial-gradient(circle at 16% 84%, rgba(45, 212, 191, 0.34) 0%, transparent 48%), linear-gradient(145deg, #09263b 0%, #071326 72%, #082d35 100%)',
+    'radial-gradient(circle at 22% 22%, rgba(250, 204, 21, 0.38) 0%, transparent 42%), radial-gradient(circle at 84% 78%, rgba(245, 158, 11, 0.32) 0%, transparent 48%), linear-gradient(145deg, #38220d 0%, #171022 72%, #2b160d 100%)',
+    'radial-gradient(circle at 80% 22%, rgba(244, 63, 94, 0.42) 0%, transparent 44%), radial-gradient(circle at 18% 82%, rgba(192, 132, 252, 0.36) 0%, transparent 48%), linear-gradient(145deg, #351329 0%, #130b22 72%, #29102c 100%)',
+    'radial-gradient(circle at 20% 18%, rgba(52, 211, 153, 0.38) 0%, transparent 44%), radial-gradient(circle at 82% 82%, rgba(14, 165, 233, 0.34) 0%, transparent 48%), linear-gradient(145deg, #092e2d 0%, #071521 72%, #092b38 100%)',
+    'radial-gradient(circle at 50% 12%, rgba(129, 140, 248, 0.44) 0%, transparent 46%), radial-gradient(circle at 50% 88%, rgba(236, 72, 153, 0.32) 0%, transparent 50%), linear-gradient(145deg, #1d1645 0%, #0b0c21 72%, #2b1235 100%)',
+  ];
+  return backgrounds[cycle];
+});
+
 const eliminatedOption = computed(() => {
   return roomState.value?.eliminatedHintOption || activeQuestion.value?.eliminatedHintOption || null;
 });
@@ -1133,6 +1152,14 @@ onBeforeUnmount(() => {
   justify-content: center;
   padding: 0.5rem;
   transition: background 0.4s ease, color 0.4s ease;
+}
+
+.question-color-cycle-background {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  transition: background 2.4s ease-in-out;
 }
 
 .gameshow-root.layout-vertical {

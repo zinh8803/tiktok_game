@@ -130,7 +130,7 @@ async function runVerificationChecklist() {
   assert.strictEqual(recovery.leaderboard.leaderboard.length >= 2, true, 'Phải khôi phục được bảng xếp hạng');
   console.log('[PASS] 7. Khôi phục trạng thái cho OBS Browser Source khi tải lại thành công.');
 
-  // 9. Quà tặng kích hoạt hiệu ứng giải trí, không cộng điểm gian lận
+  // 9. Quà tặng kích hoạt hiệu ứng và cộng 100 điểm cho người tặng
   const scoreBeforeGift = p1.totalScore;
   tiktokService.simulateEvent({
     roomCode,
@@ -142,15 +142,45 @@ async function runVerificationChecklist() {
     giftName: 'Pháo Hoa Sân Khấu',
   });
   const scoreAfterGift = db.getSessionLeaderboard(runtime.sessionId!).find((p) => p.tiktokUserId === 'tt-u1')!.totalScore;
-  assert.strictEqual(scoreBeforeGift, scoreAfterGift, 'Quà tặng không được cộng điểm trực tiếp');
-  console.log('[PASS] 8. Hiệu ứng quà tặng hoạt động và đảm bảo công bằng (không mua điểm).');
+  assert.strictEqual(scoreAfterGift, scoreBeforeGift + 100, 'Mỗi quà tặng phải cộng 100 điểm cho người gửi');
+  console.log(`[PASS] 8. Quà tặng cộng 100 điểm cho người gửi (tổng: ${scoreAfterGift}).`);
+
+  db.upsertGiftMapping({
+    giftId: 'test-eliminate-wrong',
+    giftName: 'Quà loại đáp án sai',
+    effectType: 'CHEER_BANNER',
+    rewardType: 'ELIMINATE_WRONG',
+    displayMessage: 'đã loại một đáp án sai!',
+  });
+  gameEngine.resetToWaitingRoom(roomCode);
+  gameEngine.startMatch(roomCode, { immediate: true });
+  await new Promise((r) => setTimeout(r, 120));
+  const eliminationGift = tiktokService.simulateEvent({
+    roomCode,
+    type: 'GIFT',
+    userId: 'tt-u1',
+    username: 'player_one',
+    nickname: 'Người Chơi 1',
+    giftId: 'test-eliminate-wrong',
+    giftName: 'Quà loại đáp án sai',
+  }) as any;
+  assert.strictEqual(
+    eliminationGift.giftResult.eliminatedHintOption !== null,
+    true,
+    'Quà cấu hình loại đáp án sai phải loại được một đáp án khi câu hỏi đang mở'
+  );
+  assert.strictEqual(
+    eliminationGift.giftResult.giftPoints,
+    0,
+    'Quà loại đáp án sai không được cộng điểm'
+  );
+  console.log('[PASS] 9. Quà tặng có thể cấu hình để loại một đáp án sai thay vì cộng điểm.');
 
   gameEngine.resetToWaitingRoom(roomCode);
-  console.log('=== TẤT CẢ 8/8 BÀI KIỂM THỬ NGHIỆP VỤ ĐỀU ĐẠT (100% PASS) ===');
+  console.log('=== TẤT CẢ 9/9 BÀI KIỂM THỬ NGHIỆP VỤ ĐỀU ĐẠT (100% PASS) ===');
 }
 
 runVerificationChecklist().catch((err) => {
   console.error('Verification failed:', err);
   process.exit(1);
 });
-
