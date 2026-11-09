@@ -32,6 +32,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       paddingBottom?: number;
       preset: string;
       theme?: string;
+      bgmEnabled?: boolean;
+      bgmVolume?: number;
+      sfxVolume?: number;
+      lofiStyle?: string;
     }
   >();
 
@@ -125,6 +129,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       paddingBottom?: number;
       preset?: string;
       theme?: string;
+      bgmEnabled?: boolean;
+      bgmVolume?: number;
+      sfxVolume?: number;
+      lofiStyle?: string;
     }
   ) {
     const roomCode = (payload?.roomCode || 'KB2026').toUpperCase();
@@ -139,6 +147,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       paddingBottom: 262,
       preset: 'fullscreen',
       theme: 'cute',
+      bgmEnabled: true,
+      bgmVolume: 40,
+      sfxVolume: 80,
+      lofiStyle: 'chill-cafe',
     };
     const updated = {
       frameWidth: Number(payload.frameWidth ?? current.frameWidth),
@@ -150,7 +162,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       paddingTop: Number(payload.paddingTop ?? current.paddingTop),
       paddingBottom: Number(payload.paddingBottom ?? current.paddingBottom),
       preset: payload.preset || current.preset,
-      theme: (payload as any).theme || (current as any).theme || 'cute',
+      theme: payload.theme || current.theme || 'cute',
+      bgmEnabled: payload.bgmEnabled !== undefined ? Boolean(payload.bgmEnabled) : (current.bgmEnabled ?? true),
+      bgmVolume: payload.bgmVolume !== undefined ? Number(payload.bgmVolume) : (current.bgmVolume ?? 40),
+      sfxVolume: payload.sfxVolume !== undefined ? Number(payload.sfxVolume) : (current.sfxVolume ?? 80),
+      lofiStyle: payload.lofiStyle || current.lofiStyle || 'chill-cafe',
     };
     this.roomLayoutConfigs.set(roomCode, updated);
     this.emitToRoom(roomCode, 'layout.config', updated);

@@ -229,6 +229,124 @@
 
           <!-- Bộ Chọn Theme Phong Cách (Dễ thương, Hiện đại, Vũ trụ, Hoàng gia) -->
           <div class="calib-dashboard-box tabular-nums" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-subtle);">
+            <!-- Bộ Điều Khiển Nhạc Nền Lofi Không Lời & Âm Lượng OBS -->
+            <div style="margin-bottom: 1.15rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-subtle);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem;">
+                <strong style="color: #ff75a0; font-size: 0.92rem;">
+                  🎵 Nhạc Nền Lofi Không Lời & Âm Lượng OBS
+                </strong>
+                <button
+                  type="button"
+                  class="btn"
+                  :class="dashAudio.bgmEnabled && dashAudio.bgmVolume > 0 ? 'btn-cyan' : 'btn-secondary'"
+                  style="padding: 0.25rem 0.7rem; font-size: 0.76rem;"
+                  @click="toggleDashBgm"
+                >
+                  {{ dashAudio.bgmEnabled && dashAudio.bgmVolume > 0 ? '🟢 Nhạc Lofi: Đang Bật' : '⚪ Nhạc Lofi: Đang Tắt' }}
+                </button>
+              </div>
+
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-bottom: 0.8rem;">
+                <button
+                  type="button"
+                  class="btn"
+                  :class="dashAudio.lofiStyle === 'chill-cafe' ? 'btn-cyan' : 'btn-secondary'"
+                  style="padding: 0.45rem 0.4rem; font-size: 0.76rem; justify-content: center;"
+                  @click="setDashLofiStyle('chill-cafe')"
+                >
+                  ☕ Lofi Chill Cafe
+                </button>
+                <button
+                  type="button"
+                  class="btn"
+                  :class="dashAudio.lofiStyle === 'dreamy-night' ? 'btn-cyan' : 'btn-secondary'"
+                  style="padding: 0.45rem 0.4rem; font-size: 0.76rem; justify-content: center;"
+                  @click="setDashLofiStyle('dreamy-night')"
+                >
+                  🌙 Đêm Thư Giãn
+                </button>
+                <button
+                  type="button"
+                  class="btn"
+                  :class="dashAudio.lofiStyle === 'pastel-cute' ? 'btn-cyan' : 'btn-secondary'"
+                  style="padding: 0.45rem 0.4rem; font-size: 0.76rem; justify-content: center;"
+                  @click="setDashLofiStyle('pastel-cute')"
+                >
+                  🌸 Lofi Kẹo Ngọt
+                </button>
+              </div>
+
+              <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem;">
+                <div class="form-field">
+                  <label style="display: flex; justify-content: space-between;">
+                    <span>🎧 Âm lượng Nhạc nền Lofi</span>
+                    <strong style="color: var(--accent-gold);">{{ dashAudio.bgmEnabled ? dashAudio.bgmVolume : 0 }}%</strong>
+                  </label>
+                  <div style="display: flex; align-items: center; gap: 0.4rem;">
+                    <button
+                      type="button"
+                      class="btn btn-secondary"
+                      style="padding: 0.2rem 0.55rem; font-weight: 900;"
+                      @click="stepDashBgmVolume(-10)"
+                    >
+                      −
+                    </button>
+                    <input
+                      v-model.number="dashAudio.bgmVolume"
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="5"
+                      style="flex: 1; accent-color: #ff75a0; cursor: pointer;"
+                      @input="emitDashAudioChange"
+                    />
+                    <button
+                      type="button"
+                      class="btn btn-secondary"
+                      style="padding: 0.2rem 0.55rem; font-weight: 900;"
+                      @click="stepDashBgmVolume(10)"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                <div class="form-field">
+                  <label style="display: flex; justify-content: space-between;">
+                    <span>🔔 Âm lượng Hiệu ứng (SFX)</span>
+                    <strong style="color: var(--accent-cyan);">{{ dashAudio.sfxVolume }}%</strong>
+                  </label>
+                  <div style="display: flex; align-items: center; gap: 0.4rem;">
+                    <button
+                      type="button"
+                      class="btn btn-secondary"
+                      style="padding: 0.2rem 0.55rem; font-weight: 900;"
+                      @click="stepDashSfxVolume(-10)"
+                    >
+                      −
+                    </button>
+                    <input
+                      v-model.number="dashAudio.sfxVolume"
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="5"
+                      style="flex: 1; accent-color: var(--accent-cyan); cursor: pointer;"
+                      @input="emitDashAudioChange"
+                    />
+                    <button
+                      type="button"
+                      class="btn btn-secondary"
+                      style="padding: 0.2rem 0.55rem; font-weight: 900;"
+                      @click="stepDashSfxVolume(10)"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem;">
               <strong style="color: var(--accent-cyan); font-size: 0.92rem;">
                 🎨 Phong Cách Giao Diện OBS Live (Theme)
@@ -686,6 +804,7 @@ function setDashTheme(th: 'cute' | 'modern' | 'galaxy' | 'luxury') {
 }
 
 const STORAGE_CALIB_KEY = 'kb_vertical_layout_v5';
+const STORAGE_AUDIO_KEY = 'kb_lofi_audio_settings_v1';
 const dashLayoutCalib = reactive({
   frameWidth: 1080,
   frameHeight: 1920,
@@ -698,12 +817,27 @@ const dashLayoutCalib = reactive({
   preset: 'fullscreen',
 });
 
+const dashAudio = reactive({
+  bgmEnabled: true,
+  bgmVolume: 40,
+  sfxVolume: 80,
+  lofiStyle: 'chill-cafe' as 'chill-cafe' | 'dreamy-night' | 'pastel-cute',
+});
+
 function loadDashSavedCalib() {
   if (typeof window === 'undefined') return;
   try {
     const savedTheme = window.localStorage.getItem('kb_selected_theme_v2');
     if (savedTheme && ['cute', 'modern', 'galaxy', 'luxury'].includes(savedTheme)) {
       dashTheme.value = savedTheme as any;
+    }
+    const rawAudio = window.localStorage.getItem(STORAGE_AUDIO_KEY);
+    if (rawAudio) {
+      const parsedAudio = JSON.parse(rawAudio);
+      if (typeof parsedAudio.bgmEnabled === 'boolean') dashAudio.bgmEnabled = parsedAudio.bgmEnabled;
+      if (typeof parsedAudio.bgmVolume === 'number') dashAudio.bgmVolume = parsedAudio.bgmVolume;
+      if (typeof parsedAudio.sfxVolume === 'number') dashAudio.sfxVolume = parsedAudio.sfxVolume;
+      if (parsedAudio.lofiStyle) dashAudio.lofiStyle = parsedAudio.lofiStyle;
     }
     const raw = window.localStorage.getItem(STORAGE_CALIB_KEY);
     if (raw) {
@@ -735,10 +869,23 @@ function broadcastDashCalib() {
     paddingBottom: dashLayoutCalib.paddingBottom,
     preset: dashLayoutCalib.preset,
     theme: dashTheme.value,
+    bgmEnabled: dashAudio.bgmEnabled,
+    bgmVolume: dashAudio.bgmVolume,
+    sfxVolume: dashAudio.sfxVolume,
+    lofiStyle: dashAudio.lofiStyle,
   };
   if (typeof window !== 'undefined') {
     try {
       window.localStorage.setItem(STORAGE_CALIB_KEY, JSON.stringify(payload));
+      window.localStorage.setItem(
+        STORAGE_AUDIO_KEY,
+        JSON.stringify({
+          bgmEnabled: dashAudio.bgmEnabled,
+          bgmVolume: dashAudio.bgmVolume,
+          sfxVolume: dashAudio.sfxVolume,
+          lofiStyle: dashAudio.lofiStyle,
+        })
+      );
     } catch {
       // ignore
     }
@@ -747,6 +894,37 @@ function broadcastDashCalib() {
     roomCode: roomCode.value,
     ...payload,
   });
+}
+
+function toggleDashBgm() {
+  dashAudio.bgmEnabled = !dashAudio.bgmEnabled;
+  if (dashAudio.bgmEnabled && dashAudio.bgmVolume === 0) {
+    dashAudio.bgmVolume = 40;
+  }
+  broadcastDashCalib();
+}
+
+function setDashLofiStyle(style: 'chill-cafe' | 'dreamy-night' | 'pastel-cute') {
+  dashAudio.lofiStyle = style;
+  dashAudio.bgmEnabled = true;
+  if (dashAudio.bgmVolume === 0) dashAudio.bgmVolume = 40;
+  broadcastDashCalib();
+}
+
+function stepDashBgmVolume(delta: number) {
+  dashAudio.bgmVolume = Math.max(0, Math.min(100, dashAudio.bgmVolume + delta));
+  if (dashAudio.bgmVolume > 0) dashAudio.bgmEnabled = true;
+  broadcastDashCalib();
+}
+
+function stepDashSfxVolume(delta: number) {
+  dashAudio.sfxVolume = Math.max(0, Math.min(100, dashAudio.sfxVolume + delta));
+  broadcastDashCalib();
+}
+
+function emitDashAudioChange() {
+  if (dashAudio.bgmVolume > 0) dashAudio.bgmEnabled = true;
+  broadcastDashCalib();
 }
 
 function applyDashLayoutPreset(preset: 'fullscreen' | 'tiktok-safe-zone' | '362x444') {

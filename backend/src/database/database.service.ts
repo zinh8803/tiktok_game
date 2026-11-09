@@ -1298,8 +1298,12 @@ export class DatabaseService implements OnModuleInit {
       .get(sessionId, user.id) as any;
 
     if (existing) {
-      // Cập nhật nickname hiển thị nếu người chơi đổi tên, nhưng giữ nguyên tiktok_user_id ổn định (Mục 3.3)
-      if (existing.nickname !== user.nickname || existing.username !== user.username) {
+      // Cập nhật nickname hoặc avatar_url mới nhất nếu người chơi có ảnh đại diện mới
+      if (
+        existing.nickname !== user.nickname ||
+        existing.username !== user.username ||
+        (user.avatarUrl && user.avatarUrl !== existing.avatar_url)
+      ) {
         this.db
           .prepare(`UPDATE game_players SET username = ?, nickname = ?, avatar_url = ? WHERE id = ?`)
           .run(user.username, user.nickname, user.avatarUrl || existing.avatar_url, existing.id);
@@ -1479,7 +1483,7 @@ export class DatabaseService implements OnModuleInit {
   public getQuestionGradeSummary(sessionId: string, questionId: string) {
     const results = this.db
       .prepare(
-        `SELECT r.*, p.nickname, p.username
+        `SELECT r.*, p.nickname, p.username, p.avatar_url
          FROM game_results r
          JOIN game_players p ON p.id = r.player_id
          WHERE r.session_id = ? AND r.question_id = ?
@@ -1490,16 +1494,20 @@ export class DatabaseService implements OnModuleInit {
     const optionCounts: Record<OptionLabel, number> = { A: 0, B: 0, C: 0, D: 0 };
     let correctPlayersCount = 0;
     const fastestPlayers: Array<{
+      playerId: string;
       nickname: string;
       username: string;
+      avatarUrl?: string;
       selectedOption: OptionLabel;
       isCorrect: boolean;
       points: number;
       speedBonus: number;
     }> = [];
     const allAnswers: Array<{
+      playerId: string;
       nickname: string;
       username: string;
+      avatarUrl?: string;
       selectedOption: OptionLabel;
       isCorrect: boolean;
       points: number;
@@ -1515,8 +1523,10 @@ export class DatabaseService implements OnModuleInit {
       const speedBonus = Number(row.speed_bonus || 0);
 
       allAnswers.push({
+        playerId: row.player_id,
         nickname: row.nickname,
         username: row.username,
+        avatarUrl: row.avatar_url || undefined,
         selectedOption: opt,
         isCorrect,
         points: totalPoints,
@@ -1525,8 +1535,10 @@ export class DatabaseService implements OnModuleInit {
       if (isCorrect) {
         correctPlayersCount++;
         fastestPlayers.push({
+          playerId: row.player_id,
           nickname: row.nickname,
           username: row.username,
+          avatarUrl: row.avatar_url || undefined,
           selectedOption: opt,
           isCorrect: true,
           points: totalPoints,

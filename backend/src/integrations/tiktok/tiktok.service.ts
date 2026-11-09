@@ -24,7 +24,17 @@ export interface TikTokConnectorChatPayload {
     uniqueId?: string;
     nickname?: string;
     profilePictureUrl?: string;
+    profilePicture?: {
+      urls?: string[];
+      url?: string[];
+    };
     avatarThumb?: {
+      urls?: string[];
+      urlList?: string[];
+      url?: string[];
+    };
+    avatarMedium?: {
+      urls?: string[];
       url?: string[];
     };
   };
@@ -62,7 +72,17 @@ export interface TikTokConnectorGiftPayload {
     uniqueId?: string;
     nickname?: string;
     profilePictureUrl?: string;
+    profilePicture?: {
+      urls?: string[];
+      url?: string[];
+    };
     avatarThumb?: {
+      urls?: string[];
+      urlList?: string[];
+      url?: string[];
+    };
+    avatarMedium?: {
+      urls?: string[];
       url?: string[];
     };
   };
@@ -344,6 +364,29 @@ export class TikTokService {
     return this.getConnectionStatus(code);
   }
 
+  private extractAvatarUrl(payload: any): string | undefined {
+    const u = payload?.user || payload;
+    const candidates = [
+      u?.profilePicture?.urls?.[0],
+      u?.profilePicture?.url?.[0],
+      u?.avatarThumb?.urls?.[0],
+      u?.avatarThumb?.urlList?.[0],
+      u?.avatarThumb?.url?.[0],
+      u?.avatarMedium?.urls?.[0],
+      u?.avatarMedium?.url?.[0],
+      u?.avatarLarge?.urls?.[0],
+      u?.profilePictureUrl,
+      payload?.profilePictureUrl,
+      payload?.avatarUrl,
+    ];
+    for (const c of candidates) {
+      if (typeof c === 'string' && c.trim().length > 0) {
+        return c.trim();
+      }
+    }
+    return undefined;
+  }
+
   private handleIncomingChat(roomCode: string, payload: TikTokConnectorChatPayload) {
     const userId = String(
       payload.user?.id ||
@@ -363,10 +406,7 @@ export class TikTokService {
     const nickname = String(
       payload.user?.nickname || payload.nickname || username
     );
-    const avatarUrl =
-      payload.user?.avatarThumb?.url?.[0] ||
-      payload.user?.profilePictureUrl ||
-      payload.profilePictureUrl;
+    const avatarUrl = this.extractAvatarUrl(payload);
     const content = String(payload.content ?? payload.comment ?? '');
     const rawMsgId = payload.common?.msgId || payload.msgId;
     const eventId =
@@ -412,10 +452,7 @@ export class TikTokService {
     const nickname = String(
       payload.user?.nickname || payload.nickname || username
     );
-    const avatarUrl =
-      payload.user?.avatarThumb?.url?.[0] ||
-      payload.user?.profilePictureUrl ||
-      payload.profilePictureUrl;
+    const avatarUrl = this.extractAvatarUrl(payload);
     const eventId = String(
       payload.common?.msgId || payload.msgId || `tt-gift-${uuidv4()}`
     );
@@ -473,6 +510,7 @@ export class TikTokService {
     const nickname = String(
       payload.user?.nickname || payload.nickname || username
     );
+    const avatarUrl = this.extractAvatarUrl(payload);
     const eventId = String(
       payload.common?.msgId || payload.msgId || `tt-join-${uuidv4()}`
     );
@@ -485,6 +523,7 @@ export class TikTokService {
         id: userId,
         username,
         nickname,
+        avatarUrl,
       },
       payload: {},
       receivedAt: Date.now(),

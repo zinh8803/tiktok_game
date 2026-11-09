@@ -22,15 +22,41 @@
     <!-- Floating Quick Calibrator & Theme Toggle (chỉ hiện trên màn hình Game Show độc lập) -->
     <div v-if="!embedded" class="calib-floating-widget" :class="{ 'calib-open': showCalibPanel }">
       <div class="calib-top-actions">
-        <!-- Nút bật/tắt âm thanh nhanh -->
-        <button
-          type="button"
-          class="quick-theme-btn"
-          :title="isSoundMuted ? 'Âm thanh đang tắt (Bấm để bật)' : 'Âm thanh đang bật (Bấm để tắt)'"
-          @click="toggleSoundMute"
-        >
-          <span>{{ isSoundMuted ? '🔇 Tắt tiếng' : '🔊 Âm thanh' }}</span>
-        </button>
+        <!-- Cụm nút bật/tắt & tăng giảm nhanh Nhạc nền Lofi trên thanh nổi -->
+        <div class="quick-audio-pill tabular-nums">
+          <button
+            type="button"
+            class="quick-audio-toggle"
+            :title="isSoundMuted ? 'Âm thanh đang tắt (Bấm để bật)' : 'Bấm để Tắt/Bật âm thanh'"
+            @click="toggleSoundMute"
+          >
+            <span>{{
+              isSoundMuted
+                ? '🔇 Đã tắt'
+                : bgmEnabled && bgmVolume > 0
+                  ? `🎵 Lofi ${bgmVolume}%`
+                  : '🔊 Chỉ SFX'
+            }}</span>
+          </button>
+          <button
+            v-if="!isSoundMuted"
+            type="button"
+            class="quick-vol-step-btn"
+            title="Giảm âm lượng nhạc Lofi (-10%)"
+            @click="stepBgmVolume(-10)"
+          >
+            −
+          </button>
+          <button
+            v-if="!isSoundMuted"
+            type="button"
+            class="quick-vol-step-btn"
+            title="Tăng âm lượng nhạc Lofi (+10%)"
+            @click="stepBgmVolume(10)"
+          >
+            +
+          </button>
+        </div>
 
         <!-- Nút đổi theme nhanh 1 chạm -->
         <button
@@ -46,14 +72,113 @@
         <button
           type="button"
           class="calib-toggle-btn"
-          title="Cài đặt Theme & Khung hình TikTok"
+          title="Cài đặt Nhạc Lofi, Theme & Khung hình TikTok"
           @click="showCalibPanel = !showCalibPanel"
         >
-          <span>⚙️ {{ showCalibPanel ? 'Đóng' : 'Chỉnh khớp & Theme' }}</span>
+          <span>⚙️ {{ showCalibPanel ? 'Đóng' : 'Nhạc & Cài đặt' }}</span>
         </button>
       </div>
 
       <div v-if="showCalibPanel" class="calib-popup-card tabular-nums">
+        <!-- BỘ CÀI ĐẶT NHẠC NỀN LOFI KHÔNG LỜI & ÂM LƯỢNG -->
+        <div class="lofi-audio-section">
+          <div class="calib-popup-header">
+            <strong>🎵 Nhạc Nền Lofi Không Lời</strong>
+            <button
+              type="button"
+              class="lofi-power-btn"
+              :class="{ active: !isSoundMuted && bgmEnabled && bgmVolume > 0 }"
+              @click="toggleBgmEnabled"
+            >
+              {{ !isSoundMuted && bgmEnabled && bgmVolume > 0 ? '🟢 Đang Bật' : '⚪ Đang Tắt' }}
+            </button>
+          </div>
+
+          <!-- Chọn phong cách giai điệu Lofi -->
+          <div class="lofi-style-row">
+            <button
+              v-for="st in LOFI_STYLE_OPTIONS"
+              :key="st.id"
+              type="button"
+              class="lofi-style-btn"
+              :class="{ active: lofiStyle === st.id }"
+              :title="st.desc"
+              @click="changeLofiStyle(st.id)"
+            >
+              <span>{{ st.icon }}</span>
+              <strong>{{ st.name.replace('Lofi ', '') }}</strong>
+            </button>
+          </div>
+
+          <!-- Thanh chỉnh âm lượng Nhạc nền Lofi (Tăng / Giảm) -->
+          <div class="calib-slider-group">
+            <label>
+              <span>🎧 Âm lượng Nhạc Lofi</span>
+              <strong>{{ isSoundMuted || !bgmEnabled ? '0%' : `${bgmVolume}%` }}</strong>
+            </label>
+            <div class="vol-slider-with-btns">
+              <button
+                type="button"
+                class="vol-step-btn"
+                title="Giảm nhạc nền 10%"
+                @click="stepBgmVolume(-10)"
+              >
+                −
+              </button>
+              <input
+                v-model.number="bgmVolume"
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                @input="onAudioControlChange"
+              />
+              <button
+                type="button"
+                class="vol-step-btn"
+                title="Tăng nhạc nền 10%"
+                @click="stepBgmVolume(10)"
+              >
+                +
+              </button>
+            </div>
+          </div>
+
+          <!-- Thanh chỉnh âm lượng Hiệu ứng (Đếm ngược & Trả lời đúng) -->
+          <div class="calib-slider-group">
+            <label>
+              <span>🔔 Âm lượng Hiệu ứng (SFX)</span>
+              <strong>{{ isSoundMuted ? '0%' : `${sfxVolume}%` }}</strong>
+            </label>
+            <div class="vol-slider-with-btns">
+              <button
+                type="button"
+                class="vol-step-btn"
+                title="Giảm hiệu ứng 10%"
+                @click="stepSfxVolume(-10)"
+              >
+                −
+              </button>
+              <input
+                v-model.number="sfxVolume"
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                @input="onAudioControlChange"
+              />
+              <button
+                type="button"
+                class="vol-step-btn"
+                title="Tăng hiệu ứng 10%"
+                @click="stepSfxVolume(10)"
+              >
+                +
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- BỘ CHỌN THEME PHONG CÁCH -->
         <div class="theme-selector-section">
           <div class="theme-section-title">
@@ -328,7 +453,14 @@
                   :key="plr.id"
                   class="player-chip"
                 >
-                  {{ plr.nickname }}
+                  <img
+                    class="chip-avatar"
+                    :src="resolveAvatarSrc(plr)"
+                    :alt="plr.nickname"
+                    referrerpolicy="no-referrer"
+                    @error="markAvatarFailed(plr)"
+                  />
+                  <span>{{ plr.nickname }}</span>
                 </span>
               </div>
               <p v-else class="empty-players-hint">
@@ -436,7 +568,30 @@
                 <h3>Giải thích đáp án {{ questionResult.correctOption }}</h3>
                 <p>{{ questionResult.explanation }}</p>
               </div>
+              <div v-if="questionResult.fastestPlayers?.length" class="fastest-box">
+                <h4>⚡ Nhanh nhất câu này</h4>
+                <div class="fastest-list">
+                  <div
+                    v-for="(fp, fIdx) in questionResult.fastestPlayers.slice(0, 3)"
+                    :key="fp.playerId || fp.username || fIdx"
+                    class="fastest-item"
+                  >
+                    <div class="fastest-user">
+                      <img
+                        class="fastest-avatar"
+                        :src="resolveAvatarSrc(fp)"
+                        :alt="fp.nickname"
+                        referrerpolicy="no-referrer"
+                        @error="markAvatarFailed(fp)"
+                      />
+                      <strong>{{ fp.nickname }}</strong>
+                    </div>
+                    <span class="fastest-pts tabular-nums">+{{ fp.points }}đ</span>
+                  </div>
+                </div>
+              </div>
             </div>
+
           </div>
 
           <!-- 4. MÀN HÌNH BẢNG XẾP HẠNG TRUNG TÂM (LEADERBOARD PHASE) -->
@@ -461,18 +616,13 @@
                 }"
               >
                 <div class="lb-rank">{{ entry.rank }}</div>
-                <div class="player-avatar avatar-md">
+                <div class="player-avatar avatar-md" :class="`avatar-rank-${entry.rank}`">
                   <img
-                    v-if="hasAvatar(entry)"
-                    :src="entry.avatarUrl"
+                    :src="resolveAvatarSrc(entry)"
                     :alt="entry.nickname"
                     referrerpolicy="no-referrer"
-                    loading="lazy"
                     @error="markAvatarFailed(entry)"
                   />
-                  <span v-else :style="{ background: avatarFallbackColor(entry) }">
-                    {{ avatarInitial(entry) }}
-                  </span>
                 </div>
                 <div class="lb-player-info">
                   <strong>{{ entry.nickname }}</strong>
@@ -507,18 +657,13 @@
                 <div class="podium-medal">
                   {{ idx === 0 ? 'QUÁN QUÂN 🏆' : `HẠNG ${idx + 1}` }}
                 </div>
-                <div class="player-avatar avatar-lg podium-avatar">
+                <div class="player-avatar avatar-lg podium-avatar" :class="`avatar-rank-${idx + 1}`">
                   <img
-                    v-if="hasAvatar(item)"
-                    :src="item.avatarUrl"
+                    :src="resolveAvatarSrc(item)"
                     :alt="item.nickname"
                     referrerpolicy="no-referrer"
-                    loading="lazy"
                     @error="markAvatarFailed(item)"
                   />
-                  <span v-else :style="{ background: avatarFallbackColor(item) }">
-                    {{ avatarInitial(item) }}
-                  </span>
                 </div>
                 <strong class="podium-name">{{ item.nickname }}</strong>
                 <div class="podium-score">{{ item.totalScore }} điểm</div>
@@ -534,28 +679,24 @@
           <div class="sidebar-card">
             <div class="sidebar-header">
               <Trophy :size="15" class="icon-gold" />
-              <h3>Top Xếp Hạng</h3>
+              <h3>Top Xếp Hạng ({{ leaderboard.length }})</h3>
             </div>
 
             <div v-if="leaderboard.length" class="mini-lb-list tabular-nums">
               <div
-                v-for="item in leaderboard.slice(0, isVerticalLayout ? 5 : 8)"
+                v-for="item in leaderboard.slice(0, isVerticalLayout ? 6 : 8)"
                 :key="item.playerId"
                 class="mini-lb-item"
+                :class="`mini-item-rank-${item.rank}`"
               >
                 <span class="mini-rank" :class="`rank-${item.rank}`">{{ item.rank }}</span>
-                <div class="player-avatar avatar-sm">
+                <div class="player-avatar avatar-sm" :class="`avatar-rank-${item.rank}`">
                   <img
-                    v-if="hasAvatar(item)"
-                    :src="item.avatarUrl"
+                    :src="resolveAvatarSrc(item)"
                     :alt="item.nickname"
                     referrerpolicy="no-referrer"
-                    loading="lazy"
                     @error="markAvatarFailed(item)"
                   />
-                  <span v-else :style="{ background: avatarFallbackColor(item) }">
-                    {{ avatarInitial(item) }}
-                  </span>
                 </div>
                 <div class="mini-user">
                   <strong>{{ item.nickname }}</strong>
@@ -592,7 +733,7 @@ import {
 } from 'lucide-vue-next';
 import { api } from '../services/api';
 import { createRoomSocket } from '../services/socket';
-import { soundFX } from '../services/sound';
+import { soundFX, LOFI_STYLE_OPTIONS, type LofiStyle } from '../services/sound';
 import { PhaserStageController } from '../game/PhaserStage';
 import type { Socket } from 'socket.io-client';
 
@@ -927,6 +1068,16 @@ function handleStorageSync(e: StorageEvent) {
       currentTheme.value = e.newValue as GameTheme;
     }
   }
+  if (e.key === STORAGE_AUDIO_KEY && e.newValue) {
+    try {
+      const parsed = JSON.parse(e.newValue);
+      if (typeof parsed.bgmEnabled === 'boolean') bgmEnabled.value = parsed.bgmEnabled;
+      if (typeof parsed.bgmVolume === 'number') bgmVolume.value = parsed.bgmVolume;
+      if (typeof parsed.sfxVolume === 'number') sfxVolume.value = parsed.sfxVolume;
+      if (parsed.lofiStyle) lofiStyle.value = parsed.lofiStyle as LofiStyle;
+      syncSoundEngine();
+    } catch {}
+  }
 }
 
 const roomState = ref<any>(null);
@@ -938,69 +1089,254 @@ const remainingSeconds = ref<number>(15);
 const answeredCount = ref<number>(0);
 const answeredPlayers = ref<Array<{ playerId: string; nickname: string; username: string }>>([]);
 const activeGiftBanner = ref<any>(null);
-const isSoundMuted = ref<boolean>(false);
+const isSoundMuted = ref<boolean>(Boolean(props.embedded));
+const bgmEnabled = ref<boolean>(true);
+const bgmVolume = ref<number>(40);
+const sfxVolume = ref<number>(80);
+const lofiStyle = ref<LofiStyle>('chill-cafe');
+const STORAGE_AUDIO_KEY = 'kb_lofi_audio_settings_v1';
 let giftTimeout: any = null;
 let lastTickSoundKey = '';
 
-// --- Avatar người chơi trên bảng thành tích ---
+// --- Avatar người chơi trên bảng thành tích (Ảnh thật TikTok + Chibi SVG Portrait tự động) ---
 const failedAvatarKeys = ref<Set<string>>(new Set());
+const avatarSvgCache = new Map<string, string>();
 
 function avatarKey(entry: any): string {
-  return String(entry?.playerId || entry?.username || entry?.nickname || '');
-}
-
-function hasAvatar(entry: any): boolean {
-  return Boolean(entry?.avatarUrl) && !failedAvatarKeys.value.has(avatarKey(entry));
+  return String(entry?.playerId || entry?.id || entry?.tiktokUserId || entry?.username || entry?.nickname || 'guest');
 }
 
 function markAvatarFailed(entry: any) {
+  const key = avatarKey(entry);
+  if (failedAvatarKeys.value.has(key)) return;
   const next = new Set(failedAvatarKeys.value);
-  next.add(avatarKey(entry));
+  next.add(key);
   failedAvatarKeys.value = next;
 }
 
-function avatarInitial(entry: any): string {
-  const name = String(entry?.nickname || entry?.username || '?').trim();
-  return (Array.from(name)[0] || '?').toUpperCase();
+function generateCuteAvatarDataUri(entry: any): string {
+  const key = avatarKey(entry);
+  const cached = avatarSvgCache.get(key);
+  if (cached) return cached;
+
+  let hash = 2166136261;
+  for (let i = 0; i < key.length; i++) {
+    hash ^= key.charCodeAt(i);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+
+  const bgPairs = [
+    ['#ff75a0', '#a855f7'],
+    ['#38bdf8', '#6366f1'],
+    ['#34d399', '#0ea5e9'],
+    ['#fbbf24', '#f97316'],
+    ['#f472b6', '#fb7185'],
+    ['#a78bfa', '#ec4899'],
+    ['#2dd4bf', '#3b82f6'],
+    ['#f59e0b', '#ef4444'],
+  ];
+  const skinTones = ['#ffe4d6', '#ffdbb5', '#fce0c5', '#f5cba7'];
+  const hairColors = ['#2d1b4e', '#4a2511', '#1e293b', '#831843', '#b45309', '#4c1d95', '#be123c', '#0f766e'];
+  const shirtColors = ['#ff4785', '#6366f1', '#10b981', '#f59e0b', '#ec4899', '#06b6d4'];
+
+  const [bg1, bg2] = bgPairs[hash % bgPairs.length];
+  const skin = skinTones[(hash >>> 3) % skinTones.length];
+  const hair = hairColors[(hash >>> 5) % hairColors.length];
+  const shirt = shirtColors[(hash >>> 7) % shirtColors.length];
+  const styleIdx = (hash >>> 9) % 4;
+  const accessoryIdx = (hash >>> 11) % 4;
+
+  // Tóc đa dạng theo nhân vật
+  const hairBackSvg =
+    styleIdx === 0
+      ? `<circle cx="50" cy="44" r="29" fill="${hair}" /><circle cx="24" cy="32" r="10" fill="${hair}" /><circle cx="76" cy="32" r="10" fill="${hair}" />`
+      : styleIdx === 1
+        ? `<path d="M21 48 C21 20 79 20 79 48 L82 72 C65 66 35 66 18 72 Z" fill="${hair}" />`
+        : styleIdx === 2
+          ? `<circle cx="50" cy="43" r="28" fill="${hair}" />`
+          : `<path d="M22 46 C22 18 78 18 78 46 L75 62 L25 62 Z" fill="${hair}" />`;
+
+  const hairBangsSvg =
+    styleIdx === 0
+      ? `<path d="M24 42 Q37 22 50 34 Q63 22 76 42 Q64 29 50 37 Q36 29 24 42 Z" fill="${hair}" />`
+      : styleIdx === 1
+        ? `<path d="M23 43 C30 24 70 24 77 43 C65 33 35 33 23 43 Z" fill="${hair}" />`
+        : `<path d="M24 40 Q40 24 54 35 Q67 25 76 40 C68 26 32 26 24 40 Z" fill="${hair}" />`;
+
+  // Phụ kiện dễ thương (Tai mèo / Vương miện / Tai nghe / Ngôi sao)
+  const accessorySvg =
+    accessoryIdx === 0
+      ? `<polygon points="24,26 32,12 40,23" fill="${hair}" /><polygon points="27,24 32,15 37,22" fill="#fda4af" /><polygon points="76,26 68,12 60,23" fill="${hair}" /><polygon points="73,24 68,15 63,22" fill="#fda4af" />`
+      : accessoryIdx === 1
+        ? `<polygon points="36,21 41,10 50,17 59,10 64,21" fill="#fbbf24" stroke="#ffffff" stroke-width="1.5" />`
+        : accessoryIdx === 2
+          ? `<path d="M20 48 A30 30 0 0 1 80 48" fill="none" stroke="#38bdf8" stroke-width="4" /><rect x="15" y="42" width="8" height="15" rx="4" fill="#0284c7" /><rect x="77" y="42" width="8" height="15" rx="4" fill="#0284c7" />`
+          : `<circle cx="70" cy="27" r="5" fill="#fde047" stroke="#ffffff" stroke-width="1.2" />`;
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+    <defs>
+      <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="${bg1}" />
+        <stop offset="100%" stop-color="${bg2}" />
+      </linearGradient>
+    </defs>
+    <rect width="100" height="100" rx="50" fill="url(#g)" />
+    <circle cx="50" cy="96" r="30" fill="${shirt}" />
+    ${hairBackSvg}
+    <circle cx="50" cy="50" r="23" fill="${skin}" />
+    ${hairBangsSvg}
+    <circle cx="41" cy="51" r="3.4" fill="#1e1b4b" />
+    <circle cx="59" cy="51" r="3.4" fill="#1e1b4b" />
+    <circle cx="42.2" cy="49.8" r="1.2" fill="#ffffff" />
+    <circle cx="60.2" cy="49.8" r="1.2" fill="#ffffff" />
+    <ellipse cx="35" cy="56.5" rx="4.2" ry="2.2" fill="#fb7185" opacity="0.65" />
+    <ellipse cx="65" cy="56.5" rx="4.2" ry="2.2" fill="#fb7185" opacity="0.65" />
+    <path d="M44 59 Q50 64.5 56 59" fill="none" stroke="#881337" stroke-width="2.4" stroke-linecap="round" />
+    ${accessorySvg}
+  </svg>`;
+
+  const uri = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  avatarSvgCache.set(key, uri);
+  return uri;
 }
 
-const AVATAR_FALLBACK_COLORS = [
-  'linear-gradient(135deg, #ff6b9d, #c084fc)',
-  'linear-gradient(135deg, #38bdf8, #6366f1)',
-  'linear-gradient(135deg, #34d399, #0ea5e9)',
-  'linear-gradient(135deg, #fbbf24, #f97316)',
-  'linear-gradient(135deg, #f43f5e, #a855f7)',
-  'linear-gradient(135deg, #2dd4bf, #84cc16)',
-];
-
-function avatarFallbackColor(entry: any): string {
+function resolveAvatarSrc(entry: any): string {
   const key = avatarKey(entry);
-  let hash = 0;
-  for (let i = 0; i < key.length; i++) {
-    hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  const rawUrl = typeof entry?.avatarUrl === 'string' ? entry.avatarUrl.trim() : '';
+  if (rawUrl && !failedAvatarKeys.value.has(key)) {
+    return rawUrl;
   }
-  return AVATAR_FALLBACK_COLORS[hash % AVATAR_FALLBACK_COLORS.length];
+  return generateCuteAvatarDataUri(entry);
+}
+
+function syncSoundEngine() {
+  // Nếu là khung preview nhúng nhỏ trong Dashboard thì tắt tiếng mặc định để tránh vọng âm với tab OBS
+  const effectiveMuted = props.embedded ? true : isSoundMuted.value;
+  soundFX.setMuted(effectiveMuted);
+  soundFX.setBgmEnabled(bgmEnabled.value);
+  soundFX.setBgmVolume(bgmVolume.value);
+  soundFX.setSfxVolume(sfxVolume.value);
+  soundFX.setLofiStyle(lofiStyle.value);
+  soundFX.syncBgmPlaybackState();
+}
+
+function saveAudioPrefs(broadcast = true) {
+  if (typeof window !== 'undefined') {
+    try {
+      const key = props.embedded ? 'kb_sound_muted_embed' : 'kb_sound_muted_obs';
+      window.localStorage.setItem(key, isSoundMuted.value ? '1' : '0');
+      window.localStorage.setItem(
+        STORAGE_AUDIO_KEY,
+        JSON.stringify({
+          bgmEnabled: bgmEnabled.value,
+          bgmVolume: bgmVolume.value,
+          sfxVolume: sfxVolume.value,
+          lofiStyle: lofiStyle.value,
+        })
+      );
+    } catch {}
+  }
+  syncSoundEngine();
+  if (broadcast) {
+    socket?.emit('layout.update', {
+      roomCode: roomCode.value,
+      ...layoutCalib.value,
+      theme: currentTheme.value,
+      bgmEnabled: bgmEnabled.value,
+      bgmVolume: bgmVolume.value,
+      sfxVolume: sfxVolume.value,
+      lofiStyle: lofiStyle.value,
+    });
+  }
 }
 
 function loadSavedSoundPref() {
   if (typeof window === 'undefined') return;
   try {
     const key = props.embedded ? 'kb_sound_muted_embed' : 'kb_sound_muted_obs';
-    isSoundMuted.value = window.localStorage.getItem(key) === '1';
+    const savedMute = window.localStorage.getItem(key);
+    if (savedMute !== null) {
+      isSoundMuted.value = savedMute === '1';
+    } else {
+      isSoundMuted.value = Boolean(props.embedded);
+    }
+
+    const rawAudio = window.localStorage.getItem(STORAGE_AUDIO_KEY);
+    if (rawAudio) {
+      const parsed = JSON.parse(rawAudio);
+      if (typeof parsed.bgmEnabled === 'boolean') bgmEnabled.value = parsed.bgmEnabled;
+      if (typeof parsed.bgmVolume === 'number') bgmVolume.value = Math.max(0, Math.min(100, parsed.bgmVolume));
+      if (typeof parsed.sfxVolume === 'number') sfxVolume.value = Math.max(0, Math.min(100, parsed.sfxVolume));
+      if (parsed.lofiStyle && ['chill-cafe', 'dreamy-night', 'pastel-cute'].includes(parsed.lofiStyle)) {
+        lofiStyle.value = parsed.lofiStyle as LofiStyle;
+      }
+    }
   } catch {}
+  syncSoundEngine();
 }
 
 function toggleSoundMute() {
   isSoundMuted.value = !isSoundMuted.value;
-  if (typeof window !== 'undefined') {
-    try {
-      const key = props.embedded ? 'kb_sound_muted_embed' : 'kb_sound_muted_obs';
-      window.localStorage.setItem(key, isSoundMuted.value ? '1' : '0');
-    } catch {}
+  if (!isSoundMuted.value && bgmVolume.value === 0) {
+    bgmVolume.value = 40;
+    bgmEnabled.value = true;
   }
+  saveAudioPrefs(true);
   if (!isSoundMuted.value) {
     soundFX.playCountdownTick(10);
   }
+}
+
+function toggleBgmEnabled() {
+  if (isSoundMuted.value) {
+    isSoundMuted.value = false;
+    bgmEnabled.value = true;
+    if (bgmVolume.value === 0) bgmVolume.value = 40;
+  } else {
+    bgmEnabled.value = !bgmEnabled.value;
+    if (bgmEnabled.value && bgmVolume.value === 0) {
+      bgmVolume.value = 40;
+    }
+  }
+  saveAudioPrefs(true);
+}
+
+function changeLofiStyle(style: LofiStyle) {
+  lofiStyle.value = style;
+  if (isSoundMuted.value) isSoundMuted.value = false;
+  if (!bgmEnabled.value) bgmEnabled.value = true;
+  if (bgmVolume.value === 0) bgmVolume.value = 40;
+  saveAudioPrefs(true);
+}
+
+function stepBgmVolume(delta: number) {
+  const next = Math.max(0, Math.min(100, bgmVolume.value + delta));
+  bgmVolume.value = next;
+  if (next > 0) {
+    bgmEnabled.value = true;
+    if (isSoundMuted.value) isSoundMuted.value = false;
+  }
+  saveAudioPrefs(true);
+}
+
+function stepSfxVolume(delta: number) {
+  const next = Math.max(0, Math.min(100, sfxVolume.value + delta));
+  sfxVolume.value = next;
+  if (next > 0 && isSoundMuted.value) {
+    isSoundMuted.value = false;
+  }
+  saveAudioPrefs(true);
+  if (next > 0) {
+    soundFX.playCountdownTick(10);
+  }
+}
+
+function onAudioControlChange() {
+  if (bgmVolume.value > 0) {
+    bgmEnabled.value = true;
+    if (isSoundMuted.value) isSoundMuted.value = false;
+  }
+  saveAudioPrefs(true);
 }
 
 const currentPhase = computed(() => {
@@ -1225,6 +1561,13 @@ onMounted(async () => {
         window.localStorage.setItem('kb_selected_theme_v2', cfg.theme);
       } catch {}
     }
+    if (typeof cfg.bgmEnabled === 'boolean') bgmEnabled.value = cfg.bgmEnabled;
+    if (typeof cfg.bgmVolume === 'number') bgmVolume.value = Math.max(0, Math.min(100, cfg.bgmVolume));
+    if (typeof cfg.sfxVolume === 'number') sfxVolume.value = Math.max(0, Math.min(100, cfg.sfxVolume));
+    if (cfg.lofiStyle && ['chill-cafe', 'dreamy-night', 'pastel-cute'].includes(cfg.lofiStyle)) {
+      lofiStyle.value = cfg.lofiStyle as LofiStyle;
+    }
+    saveAudioPrefs(false);
     layoutCalib.value = {
       frameWidth: Number(cfg.frameWidth ?? layoutCalib.value.frameWidth ?? 1080),
       frameHeight: Number(cfg.frameHeight ?? layoutCalib.value.frameHeight ?? 1920),
@@ -1265,6 +1608,9 @@ onBeforeUnmount(() => {
   window.removeEventListener('storage', handleStorageSync);
   frameResizeObserver?.disconnect();
   if (giftTimeout) clearTimeout(giftTimeout);
+  if (!props.embedded) {
+    soundFX.stopBgm();
+  }
   socket?.disconnect();
   phaserStage?.destroy();
 });
@@ -1538,6 +1884,148 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+}
+
+.quick-audio-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(13, 17, 39, 0.88);
+  border: 1px solid rgba(0, 240, 255, 0.45);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(6px);
+}
+
+.quick-audio-toggle {
+  padding: 0.28rem 0.65rem;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.quick-audio-toggle:hover {
+  background: rgba(0, 240, 255, 0.18);
+}
+
+.quick-vol-step-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2f1ff;
+  font-size: 0.85rem;
+  font-weight: 900;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.quick-vol-step-btn:hover {
+  background: var(--accent-cyan);
+  color: #06101f;
+  border-color: var(--accent-cyan);
+}
+
+.lofi-audio-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.lofi-power-btn {
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+  font-size: 0.68rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lofi-power-btn.active {
+  background: rgba(16, 185, 129, 0.22);
+  border-color: #34d399;
+  color: #6ee7b7;
+}
+
+.lofi-style-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.35rem;
+}
+
+.lofi-style-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.35rem 0.25rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: #dbeafe;
+  font-size: 0.66rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lofi-style-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.lofi-style-btn.active {
+  background: rgba(255, 117, 160, 0.22);
+  border-color: #ff75a0;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(255, 117, 160, 0.25);
+}
+
+.vol-slider-with-btns {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.vol-slider-with-btns input[type='range'] {
+  flex: 1;
+}
+
+.vol-step-btn {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 0.4rem;
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  background: rgba(24, 30, 64, 0.85);
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 900;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.vol-step-btn:hover {
+  background: var(--accent-cyan);
+  color: #081024;
 }
 
 .quick-theme-btn {
@@ -1937,13 +2425,25 @@ onBeforeUnmount(() => {
 }
 
 .player-chip {
-  padding: 0.25vh 0.8vh;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22vh 0.75vh 0.22vh 0.28vh;
   border-radius: 999px;
   background: rgba(0, 240, 255, 0.12);
   border: 1px solid rgba(0, 240, 255, 0.3);
   font-size: clamp(10px, 1.5vh, 13px);
   font-weight: 600;
   color: #e2f1ff;
+}
+
+.chip-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
 }
 
 .empty-players-hint {
@@ -2215,14 +2715,48 @@ onBeforeUnmount(() => {
 .fastest-box h4 {
   font-size: 0.75rem;
   color: var(--accent-gold);
-  margin-bottom: 0.2rem;
+  margin-bottom: 0.3rem;
+}
+
+.fastest-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }
 
 .fastest-item {
-  display: flex;
+  display: inline-flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
-  font-size: 0.78rem;
+  gap: 0.45rem;
+  padding: 0.2rem 0.55rem 0.2rem 0.25rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  font-size: 0.76rem;
+}
+
+.fastest-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.fastest-user strong {
+  max-width: 110px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fastest-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1.5px solid var(--accent-gold);
 }
 
 .fastest-pts {
@@ -2322,18 +2856,19 @@ onBeforeUnmount(() => {
 }
 
 .avatar-sm {
-  width: 24px;
-  height: 24px;
-  border-width: 1.5px;
+  width: 28px;
+  height: 28px;
+  border-width: 2px;
 }
 
 .avatar-sm span {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
 }
 
 .avatar-md {
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
+  border-width: 2.5px;
 }
 
 .avatar-md span {
@@ -2341,8 +2876,8 @@ onBeforeUnmount(() => {
 }
 
 .avatar-lg {
-  width: 64px;
-  height: 64px;
+  width: 68px;
+  height: 68px;
   border-width: 3px;
 }
 
@@ -2354,20 +2889,25 @@ onBeforeUnmount(() => {
   margin: 0.25rem auto 0.15rem;
 }
 
+.avatar-rank-1,
 .lb-top-1 .player-avatar,
 .podium-gold .player-avatar {
-  border-color: var(--accent-gold);
-  box-shadow: 0 0 12px rgba(250, 204, 21, 0.55);
+  border-color: #fbbf24;
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.6);
 }
 
+.avatar-rank-2,
 .lb-top-2 .player-avatar,
 .podium-silver .player-avatar {
   border-color: #e2e8f0;
+  box-shadow: 0 0 8px rgba(226, 232, 240, 0.45);
 }
 
+.avatar-rank-3,
 .lb-top-3 .player-avatar,
 .podium-bronze .player-avatar {
   border-color: #f59e0b;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.45);
 }
 
 .lb-player-info {
@@ -2481,7 +3021,7 @@ onBeforeUnmount(() => {
 
 .layout-vertical .mini-lb-list {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 0.4rem;
 }
 
