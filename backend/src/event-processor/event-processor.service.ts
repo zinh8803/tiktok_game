@@ -58,9 +58,19 @@ export class EventProcessorService {
       cleaned === '!join' ||
       cleaned === 'tham gia' ||
       cleaned === 'choi' ||
-      cleaned === 'chơi' ||
-      cleaned === 'ready' ||
-      cleaned === 'ss'
+      cleaned === 'chơi'
+    );
+  }
+
+  /**
+   * Nhận diện lệnh "sẵn sàng" / "bắt đầu" trận đấu khi phòng đang ở sảnh chờ (WAITING)
+   * Hỗ trợ các biến thể: "ss", "sss", "!ss", "sẵn sàng", "san sang", "ready", "start", "bắt đầu", "bat dau", "go"...
+   */
+  public isStartCommand(rawContent?: string): boolean {
+    if (!rawContent) return false;
+    const cleaned = rawContent.trim().toLowerCase();
+    return /^(\/|!|#)?(ss+|sẵn\s*sàng|san\s*sang|sansang|ready|start|bắt\s*đầu|bat\s*dau|go)(\s+.*)?$/i.test(
+      cleaned
     );
   }
 
@@ -141,10 +151,12 @@ export class EventProcessorService {
 
       const normalizedAnswer = this.parseAnswerFromComment(event.payload.content);
       const joinCmd = this.isJoinCommand(event.payload.content);
+      const startCmd = this.isStartCommand(event.payload.content);
       const engineResult = this.gameEngine.handleCommentEvent(
         event,
         normalizedAnswer,
-        joinCmd
+        joinCmd,
+        startCmd
       );
 
       return {

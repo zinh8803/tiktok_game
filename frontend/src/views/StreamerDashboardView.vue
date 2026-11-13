@@ -629,8 +629,16 @@
             </div>
 
             <div class="sim-quick-answers">
-              <span>Gửi bình luận đáp án:</span>
+              <span>Gửi bình luận thử nghiệm:</span>
               <div class="sim-answer-btns">
+                <button
+                  type="button"
+                  class="btn btn-gold sim-opt-btn"
+                  title="Giả lập người chơi gõ SS để bắt đầu trận đấu"
+                  @click="sendSimulatedComment('SS')"
+                >
+                  ⚡ Gõ "SS" (Bắt đầu)
+                </button>
                 <button
                   v-for="opt in (['A', 'B', 'C', 'D'] as const)"
                   :key="opt"

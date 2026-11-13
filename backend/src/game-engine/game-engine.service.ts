@@ -593,7 +593,8 @@ export class GameEngineService {
   public handleCommentEvent(
     event: GameEvent,
     normalizedAnswer: OptionLabel | null,
-    isJoinCommand: boolean
+    isJoinCommand: boolean,
+    isStartCommand = false
   ): {
     handled: boolean;
     action: string;
@@ -613,6 +614,23 @@ export class GameEngineService {
 
     if (runtime.sessionId) {
       this.db.upsertPlayer(runtime.sessionId, event.user);
+    }
+
+    // Nếu phòng đang ở sảnh chờ (WAITING) và có người bình luận "SS" / "sẵn sàng" / "start"
+    if (runtime.status === 'WAITING' && isStartCommand) {
+      this.pushRecentEvent(runtime, {
+        id: event.id,
+        type: 'START',
+        nickname: event.user.nickname,
+        username: event.user.username,
+        summary: "bình luận 'SS' - Kích hoạt bắt đầu trận đấu!",
+      });
+      try {
+        this.startMatch(runtime.roomCode);
+        return { handled: true, action: 'MATCH_STARTED_BY_COMMENT' };
+      } catch (err: any) {
+        this.logger.error(`Lỗi khi bắt đầu trận bằng lệnh SS: ${err?.message}`);
+      }
     }
 
     // Nếu phòng đang ở WAITING và người xem bình luận tham gia / hoặc bất kỳ bình luận nào

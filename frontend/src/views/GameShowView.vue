@@ -413,8 +413,8 @@
                 }}
               </h2>
               <p class="waiting-subtext">
-                Bình luận đáp án <strong>A</strong>, <strong>B</strong>, <strong>C</strong> hoặc
-                <strong>D</strong> trên khung chat LIVE để tham gia & ghi điểm!
+                Bình luận <strong>SS</strong> để bắt đầu chơi! Trả lời bằng cách gõ <strong>A</strong>, <strong>B</strong>, <strong>C</strong> hoặc
+                <strong>D</strong> trên khung chat LIVE để ghi điểm!
               </p>
             </div>
 
@@ -464,7 +464,7 @@
                 </span>
               </div>
               <p v-else class="empty-players-hint">
-                Gõ bình luận bất kỳ hoặc A / B / C / D để ghi danh lên màn hình!
+                Gõ bình luận bất kỳ hoặc gõ "SS" để bắt đầu trận đấu!
               </p>
             </div>
           </div>
