@@ -357,6 +357,12 @@ export class DatabaseService implements OnModuleInit {
     return this.hydrateQuestion(row);
   }
 
+  public cleanOptionContent(text: string): string {
+    if (!text) return '';
+    const cleaned = text.replace(/\s*[\(\[][^\)\]]*[\)\]]/g, '').trim();
+    return cleaned.length > 0 ? cleaned : text.trim();
+  }
+
   private hydrateQuestion(row: any): QuestionRecord {
     const options = this.db
       .prepare(`SELECT * FROM question_options WHERE question_id = ? ORDER BY label ASC`)
@@ -387,7 +393,7 @@ export class DatabaseService implements OnModuleInit {
         id: o.id,
         questionId: o.question_id,
         label: o.label as OptionLabel,
-        content: o.content,
+        content: this.cleanOptionContent(o.content),
         isCorrect: Boolean(o.is_correct),
       })),
       source: source
@@ -451,7 +457,7 @@ export class DatabaseService implements OnModuleInit {
           `${id}-opt-${label}`,
           id,
           label,
-          dto.options[label] || '',
+          this.cleanOptionContent(dto.options[label] || ''),
           dto.correctOption === label ? 1 : 0
         );
       });
@@ -652,29 +658,46 @@ export class DatabaseService implements OnModuleInit {
       }
     }
 
-    // Lấy danh sách câu hỏi đã dùng ở 2 trận gần nhất của phòng để hạn chế lặp lại (Mục 4.5)
+    // Lấy lịch sử sử dụng câu hỏi của phòng để đảm bảo quay vòng toàn bộ 800+ câu hỏi:
+    // Không bao giờ lặp lại câu hỏi cho đến khi tất cả câu hỏi trong ngân hàng đều đã được chơi!
     const recentSessions = this.db
       .prepare(
         `SELECT questions_snapshot FROM game_sessions
-         WHERE room_id = ?
-         ORDER BY started_at DESC LIMIT 2`
+         WHERE room_id = ? OR room_id = 'room-default'
+         ORDER BY started_at DESC LIMIT 300`
       )
       .all(config.roomId) as Array<{ questions_snapshot: string }>;
 
-    const recentQuestionIds = new Set<string>();
-    for (const s of recentSessions) {
+    // Map questionId -> chỉ số phiên gần nhất (0: trận vừa chơi xong, càng lớn càng chơi lâu rồi)
+    const lastUsedSessionIndex = new Map<string, number>();
+    recentSessions.forEach((s, sIdx) => {
       try {
         const parsed = JSON.parse(s.questions_snapshot || '[]');
         for (const item of parsed) {
-          if (item?.questionId) recentQuestionIds.add(item.questionId);
+          if (item?.questionId && !lastUsedSessionIndex.has(item.questionId)) {
+            lastUsedSessionIndex.set(item.questionId, sIdx);
+          }
         }
       } catch {
         // ignore invalid snapshot json
       }
-    }
+    });
 
-    const freshRows = rows.filter((r) => !recentQuestionIds.has(r.id));
-    const usedRows = rows.filter((r) => recentQuestionIds.has(r.id));
+    // 1. Nhóm chưa từng chơi bao giờ (neverUsed): Ưu tiên tuyệt đối cao nhất
+    // 2. Nhóm đã chơi (usedGroupedByAge): Nhóm theo độ tuổi trận để lấy câu chơi lâu nhất trước
+    const neverUsed: any[] = [];
+    const usedGroupedByAge = new Map<number, any[]>();
+
+    for (const r of rows) {
+      const sIdx = lastUsedSessionIndex.get(r.id);
+      if (sIdx === undefined) {
+        neverUsed.push(r);
+      } else {
+        const list = usedGroupedByAge.get(sIdx) || [];
+        list.push(r);
+        usedGroupedByAge.set(sIdx, list);
+      }
+    }
 
     const shuffle = <T>(arr: T[]) => {
       for (let i = arr.length - 1; i > 0; i--) {
@@ -684,9 +707,17 @@ export class DatabaseService implements OnModuleInit {
       return arr;
     };
 
+    // Sắp xếp các câu đã chơi theo thứ tự từ lâu nhất đến gần nhất (sessionIdx lớn nhất lên đầu)
+    const sortedAges = Array.from(usedGroupedByAge.keys()).sort((a, b) => b - a);
+    const sortedUsedPool: any[] = [];
+    for (const age of sortedAges) {
+      const itemsOfSameAge = usedGroupedByAge.get(age) || [];
+      sortedUsedPool.push(...shuffle(itemsOfSameAge));
+    }
+
     const combinedPool = isRunAll
       ? shuffle([...rows])
-      : [...shuffle(freshRows), ...shuffle(usedRows)];
+      : [...shuffle(neverUsed), ...sortedUsedPool];
     const selected = isRunAll
       ? combinedPool
       : combinedPool.slice(0, Math.max(1, config.questionCount));
@@ -705,7 +736,7 @@ export class DatabaseService implements OnModuleInit {
       let correctOption: OptionLabel = 'A';
       shuffledOptions.forEach((opt, optIdx) => {
         const assignedLabel = labels[optIdx] || opt.label;
-        optionsMap[assignedLabel] = opt.content;
+        optionsMap[assignedLabel] = this.cleanOptionContent(opt.content);
         if (opt.isCorrect) {
           correctOption = assignedLabel;
         }

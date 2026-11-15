@@ -671,6 +671,12 @@
               </div>
             </div>
             <p v-else class="empty-players-hint">Trận đấu đã kết thúc.</p>
+
+            <div class="victory-countdown-bar">
+              <span class="victory-countdown-badge">
+                <Clock :size="15" /> Sẽ quay lại sảnh chờ sau {{ victorySecondsRemaining }}s...
+              </span>
+            </div>
           </div>
         </section>
 
@@ -1389,10 +1395,17 @@ function animateStageTransition() {
   );
 }
 
+const victorySecondsRemaining = ref(5);
+let victoryCountdownTimer: ReturnType<typeof setInterval> | null = null;
+
 watch(currentPhase, (newPhase) => {
   animateStageTransition();
   if (newPhase === 'WAITING_ROOM' || newPhase === 'COUNTDOWN') {
     phaserStage?.setMode('WAITING');
+    if (victoryCountdownTimer) {
+      clearInterval(victoryCountdownTimer);
+      victoryCountdownTimer = null;
+    }
   } else if (newPhase === 'QUESTION') {
     phaserStage?.setMode('QUESTION');
   } else if (newPhase === 'ANSWER_REVEAL') {
@@ -1402,6 +1415,23 @@ watch(currentPhase, (newPhase) => {
     phaserStage?.setMode('VICTORY');
     phaserStage?.triggerConfetti();
     phaserStage?.triggerFireworks(4);
+    victorySecondsRemaining.value = 5;
+    if (victoryCountdownTimer) clearInterval(victoryCountdownTimer);
+    victoryCountdownTimer = setInterval(() => {
+      if (victorySecondsRemaining.value > 1) {
+        victorySecondsRemaining.value--;
+      } else {
+        if (victoryCountdownTimer) {
+          clearInterval(victoryCountdownTimer);
+          victoryCountdownTimer = null;
+        }
+      }
+    }, 1000);
+  } else {
+    if (victoryCountdownTimer) {
+      clearInterval(victoryCountdownTimer);
+      victoryCountdownTimer = null;
+    }
   }
   requestAnimationFrame(recalcAutoFit);
 });
@@ -1608,6 +1638,10 @@ onBeforeUnmount(() => {
   window.removeEventListener('storage', handleStorageSync);
   frameResizeObserver?.disconnect();
   if (giftTimeout) clearTimeout(giftTimeout);
+  if (victoryCountdownTimer) {
+    clearInterval(victoryCountdownTimer);
+    victoryCountdownTimer = null;
+  }
   if (!props.embedded) {
     soundFX.stopBgm();
   }
@@ -2988,6 +3022,33 @@ onBeforeUnmount(() => {
 .podium-accuracy {
   font-size: 0.75rem;
   color: var(--text-secondary);
+}
+
+.victory-countdown-bar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 0.8rem;
+}
+
+.victory-countdown-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: rgba(30, 41, 79, 0.88);
+  border: 1px solid rgba(147, 197, 253, 0.4);
+  padding: 0.4rem 0.95rem;
+  border-radius: 9999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #93c5fd;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  animation: victory-pulse 1.5s ease-in-out infinite alternate;
+}
+
+@keyframes victory-pulse {
+  0% { transform: scale(0.98); opacity: 0.9; }
+  100% { transform: scale(1.02); opacity: 1; }
 }
 
 /* Sidebar / Bottom Compact Leaderboard */

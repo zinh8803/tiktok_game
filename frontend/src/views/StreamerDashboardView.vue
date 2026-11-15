@@ -530,6 +530,27 @@
             </div>
           </div>
 
+          <!-- Banner Đáp Án Đúng Dành Riêng Cho MC / Streamer Khi Đang Live -->
+          <div
+            v-if="streamerActiveQuestion && roomState?.isQuestionOpen"
+            class="streamer-answer-cheat-sheet"
+          >
+            <div class="cheat-header">
+              <span class="cheat-badge">👀 ĐÁP ÁN DÀNH CHO MC (LIVE)</span>
+              <span class="cheat-question-tag">Câu {{ streamerActiveQuestion.questionIndex }}/{{ streamerActiveQuestion.totalQuestions }}</span>
+            </div>
+            <div class="cheat-body">
+              <div class="cheat-correct-pill">
+                <strong>ĐÁP ÁN ĐÚNG:</strong>
+                <span class="correct-letter">{{ streamerActiveQuestion.correctOption }}</span>
+                <span class="correct-text">{{ streamerActiveQuestion.options?.[streamerActiveQuestion.correctOption] }}</span>
+              </div>
+              <p v-if="streamerActiveQuestion.explanation" class="cheat-explanation">
+                💡 <em>{{ streamerActiveQuestion.explanation }}</em>
+              </p>
+            </div>
+          </div>
+
           <div class="director-controls-grid">
             <button
               type="button"
@@ -720,7 +741,7 @@
           </div>
 
           <div class="embedded-preview-wrapper">
-            <GameShowView :roomCodeProp="roomCode" :embedded="true" />
+            <GameShowView :roomCodeProp="roomCode" :embedded="true" :showAdminAnswers="true" />
           </div>
         </section>
       </div>
@@ -762,6 +783,7 @@ const stats = ref<any>({});
 const categories = ref<any[]>([]);
 const gifts = ref<any[]>([]);
 const roomState = ref<any>(null);
+const streamerActiveQuestion = ref<any>(null);
 const tiktokStatus = ref<any>({
   state: 'DISCONNECTED',
   tiktokRoomId: null,
@@ -1045,6 +1067,11 @@ async function loadDashboardData() {
         configForm.autoAdvance = Boolean(roomRes.roomState.config.autoAdvance);
       }
     }
+    if (roomRes.streamerActiveQuestion) {
+      streamerActiveQuestion.value = roomRes.streamerActiveQuestion;
+    } else if (roomRes.activeQuestion) {
+      streamerActiveQuestion.value = roomRes.activeQuestion;
+    }
     if (roomRes.tiktokStatus) {
       tiktokStatus.value = roomRes.tiktokStatus;
     }
@@ -1235,6 +1262,27 @@ onMounted(async () => {
 
   socket.on('room.state', (payload) => {
     roomState.value = payload;
+    if (payload?.status === 'WAITING' || payload?.status === 'FINISHED') {
+      streamerActiveQuestion.value = null;
+    }
+  });
+
+  socket.on('question.started', (payload) => {
+    if (!streamerActiveQuestion.value || streamerActiveQuestion.value.questionId !== payload.questionId) {
+      streamerActiveQuestion.value = payload;
+    }
+  });
+
+  socket.on('streamer.question.started', (payload) => {
+    streamerActiveQuestion.value = payload;
+  });
+
+  socket.on('question.result', () => {
+    // Khi câu hỏi đã công bố kết quả thì giữ nguyên hoặc đợi câu mới
+  });
+
+  socket.on('game.finished', () => {
+    streamerActiveQuestion.value = null;
   });
 
   socket.on('tiktok.status', (status) => {
@@ -1511,6 +1559,86 @@ onBeforeUnmount(() => {
 .status-pills {
   display: flex;
   gap: 0.5rem;
+}
+
+/* Banner Đáp Án Cheat Sheet Cho Streamer / MC */
+.streamer-answer-cheat-sheet {
+  margin-bottom: 0.95rem;
+  padding: 0.85rem 1.1rem;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(6, 182, 212, 0.12) 100%);
+  border: 1.5px solid rgba(16, 185, 129, 0.55);
+  box-shadow: 0 4px 18px rgba(16, 185, 129, 0.15);
+}
+
+.cheat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.cheat-badge {
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: #10b981;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.cheat-question-tag {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.cheat-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.cheat-correct-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.cheat-correct-pill strong {
+  font-size: 0.85rem;
+  color: #e2e8f0;
+}
+
+.correct-letter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 0.45rem;
+  background: #10b981;
+  color: #041f12;
+  font-weight: 900;
+  font-size: 1.1rem;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.5);
+}
+
+.correct-text {
+  font-size: 0.98rem;
+  font-weight: 800;
+  color: #6ee7b7;
+}
+
+.cheat-explanation {
+  font-size: 0.82rem;
+  color: #cbd5e1;
+  line-height: 1.35;
+  margin: 0;
+  padding-top: 0.25rem;
+  border-top: 1px dashed rgba(16, 185, 129, 0.25);
 }
 
 .director-controls-grid {

@@ -198,6 +198,7 @@ export class GameEngineService {
     const roomState = this.getRoomStatePayload(roomCode);
 
     let activeQuestion: any = null;
+    let streamerActiveQuestion: any = null;
     if (
       runtime.currentQuestionIndex >= 0 &&
       runtime.currentQuestionIndex < runtime.questions.length
@@ -213,18 +214,26 @@ export class GameEngineService {
         categoryName: q.categoryName,
         difficulty: q.difficulty,
         question: q.content,
-        options: q.options, // Tuyệt đối không có correctOption
+        options: q.options, // Tuyệt đối không có correctOption gửi cho người chơi OBS
         duration: q.timeLimit,
         remainingSeconds: Math.ceil(remainingMs / 1000),
         endsAt: runtime.questionEndsAt,
         answeredCount: runtime.answeredCountCurrentQuestion,
         eliminatedHintOption: runtime.eliminatedHintOption,
       };
+
+      // Bản dành riêng cho Streamer Dashboard / Admin có sẵn đáp án đúng
+      streamerActiveQuestion = {
+        ...activeQuestion,
+        correctOption: q.correctOption,
+        explanation: q.explanation,
+      };
     }
 
     return {
       roomState,
       activeQuestion,
+      streamerActiveQuestion,
       lastQuestionResult:
         runtime.phase === 'ANSWER_REVEAL' ? runtime.lastQuestionResult : null,
       leaderboard: {
@@ -356,8 +365,16 @@ export class GameEngineService {
       endsAt: runtime.questionEndsAt,
     };
 
+    // Bản dành riêng cho Dashboard Streamer / Admin (chứa đáp án đúng để MC biết trước khi live)
+    const streamerQuestionPayload = {
+      ...questionStartedPayload,
+      correctOption: q.correctOption,
+      explanation: q.explanation,
+    };
+
     this.emitRoomState(runtime.roomCode);
     this.realtime.emitToRoom(runtime.roomCode, 'question.started', questionStartedPayload);
+    this.realtime.emitToRoom(runtime.roomCode, 'streamer.question.started', streamerQuestionPayload);
 
     if (runtime.autoCrowdEnabled) {
       this.scheduleAutoCrowdAnswersForQuestion(runtime);
@@ -559,6 +576,14 @@ export class GameEngineService {
 
     this.emitRoomState(runtime.roomCode);
     this.realtime.emitToRoom(runtime.roomCode, 'game.finished', finishedPayload);
+
+    // Sau khi chơi xong hiển thị bảng thành tích (VICTORY) rồi 5s sau quay lại sảnh chờ
+    runtime.phaseTimeout = setTimeout(() => {
+      if (runtime.status === 'FINISHED') {
+        this.resetToWaitingRoom(runtime.roomCode);
+      }
+    }, 5000);
+
     return finishedPayload;
   }
 
@@ -616,8 +641,8 @@ export class GameEngineService {
       this.db.upsertPlayer(runtime.sessionId, event.user);
     }
 
-    // Nếu phòng đang ở sảnh chờ (WAITING) và có người bình luận "SS" / "sẵn sàng" / "start"
-    if (runtime.status === 'WAITING' && isStartCommand) {
+    // Nếu phòng đang ở sảnh chờ (WAITING) hoặc vừa kết thúc (FINISHED) và có người bình luận "SS" / "sẵn sàng" / "start"
+    if ((runtime.status === 'WAITING' || runtime.status === 'FINISHED') && isStartCommand) {
       this.pushRecentEvent(runtime, {
         id: event.id,
         type: 'START',
