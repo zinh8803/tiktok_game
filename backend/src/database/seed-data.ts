@@ -1,5 +1,6 @@
 import { QuestionDifficulty, OptionLabel, QuestionStatus } from '../common/types';
 import { EXTRA_SEED_QUESTIONS } from './extra-questions';
+import { EXTRA_MH500_QUESTIONS } from './extra-questions-mh500';
 
 export interface SeedCategory {
   id: string;
@@ -67,6 +68,34 @@ export const SEED_CATEGORIES: SeedCategory[] = [
     name: 'Ẩm thực & Đố vui Dân gian',
     description: 'Đặc sản vùng miền, ca dao tục ngữ, mẹo vặt và câu đố thú vị đời thường.',
     icon: 'sparkles',
+  },
+  {
+    id: 'cat-lit',
+    slug: 'van-hoc-ngon-ngu',
+    name: 'Văn học & Ngôn ngữ',
+    description: 'Tác phẩm văn học Việt Nam và thế giới, từ Hán Việt, thành ngữ và điển tích.',
+    icon: 'book-open',
+  },
+  {
+    id: 'cat-ent',
+    slug: 'am-nhac-dien-anh',
+    name: 'Âm nhạc & Điện ảnh',
+    description: 'Âm nhạc cổ điển, nhạc Việt, hội họa, kiến trúc và điện ảnh thế giới.',
+    icon: 'film',
+  },
+  {
+    id: 'cat-nature',
+    slug: 'the-gioi-tu-nhien',
+    name: 'Thế giới Tự nhiên & Sinh học',
+    description: 'Sinh học, y học, giải phẫu cơ thể người, hệ sinh thái và thế giới động thực vật.',
+    icon: 'leaf',
+  },
+  {
+    id: 'cat-iq',
+    slug: 'do-meo-tu-duy-iq',
+    name: 'Đố mẹo & Tư duy IQ',
+    description: 'Câu hỏi suy luận logic, toán tư duy, quy luật dãy số và đố mẹo trí tuệ.',
+    icon: 'brain',
   },
 ];
 
@@ -1385,6 +1414,7 @@ export const SEED_QUESTIONS: SeedQuestion[] = [
     attribution: 'Biên tập viên nội bộ',
   },
   ...EXTRA_SEED_QUESTIONS,
+  ...EXTRA_MH500_QUESTIONS,
 ];
 
 export const SEED_GIFTS = [
