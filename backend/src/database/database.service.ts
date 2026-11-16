@@ -1794,24 +1794,91 @@ export class DatabaseService implements OnModuleInit {
     displayMessage: string;
     durationMs?: number;
     icon?: string;
+    isActive?: boolean;
   }) {
     const rewardType = dto.rewardType || 'POINTS';
-    if (!['POINTS', 'ELIMINATE_WRONG', 'NONE'].includes(rewardType)) {
+    if (
+      ![
+        'POINTS',
+        'ELIMINATE_WRONG',
+        'POINTS_AND_ELIMINATE',
+        'ADD_TIME',
+        'NONE',
+      ].includes(rewardType)
+    ) {
       throw new Error(`Unsupported gift reward type: ${rewardType}`);
     }
-    const rewardPoints = rewardType === 'POINTS' ? dto.rewardPoints ?? 100 : 0;
+    const needsNumericValue =
+      rewardType === 'POINTS' ||
+      rewardType === 'POINTS_AND_ELIMINATE' ||
+      rewardType === 'ADD_TIME';
+    const defaultVal = rewardType === 'ADD_TIME' ? 10 : 100;
+    const rewardPoints = needsNumericValue
+      ? Number(dto.rewardPoints ?? defaultVal)
+      : 0;
     if (
-      rewardType === 'POINTS' &&
+      needsNumericValue &&
       (!Number.isInteger(rewardPoints) || rewardPoints <= 0)
     ) {
-      throw new Error(`Gift reward points must be a positive integer: ${rewardPoints}`);
+      throw new Error(
+        `Giá trị điểm/thời gian thưởng phải là số nguyên dương: ${rewardPoints}`
+      );
+    }
+
+    const isActiveInt = dto.isActive === undefined ? 1 : dto.isActive ? 1 : 0;
+    const durationMs = Number(dto.durationMs) || 4000;
+    const icon = (dto.icon || '🎁').trim();
+    const giftIdClean = String(dto.giftId || '').trim();
+    const giftNameClean = String(dto.giftName || '').trim();
+    const displayMessageClean = String(
+      dto.displayMessage || 'đã gửi quà tặng cổ vũ toàn trường quay!'
+    ).trim();
+
+    if (dto.id) {
+      const existingById = this.db
+        .prepare(`SELECT id FROM gift_mappings WHERE id = ?`)
+        .get(dto.id) as { id: string } | undefined;
+      if (existingById) {
+        // Kiểm tra nếu đổi sang gift_id đã tồn tại ở bản ghi khác thì xóa bản ghi trùng trước
+        this.db
+          .prepare(`DELETE FROM gift_mappings WHERE gift_id = ? AND id != ?`)
+          .run(giftIdClean, dto.id);
+
+        this.db
+          .prepare(
+            `UPDATE gift_mappings
+             SET gift_id = ?,
+                 gift_name = ?,
+                 effect_type = ?,
+                 reward_type = ?,
+                 reward_points = ?,
+                 display_message = ?,
+                 duration_ms = ?,
+                 icon = ?,
+                 is_active = ?
+             WHERE id = ?`
+          )
+          .run(
+            giftIdClean,
+            giftNameClean,
+            dto.effectType || 'FIREWORKS',
+            rewardType,
+            rewardPoints,
+            displayMessageClean,
+            durationMs,
+            icon,
+            isActiveInt,
+            dto.id
+          );
+        return this.getGiftMappings();
+      }
     }
 
     const id = dto.id || `gift-${uuidv4().slice(0, 8)}`;
     this.db
       .prepare(
         `INSERT INTO gift_mappings (id, gift_id, gift_name, effect_type, reward_type, reward_points, display_message, duration_ms, icon, is_active)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(gift_id) DO UPDATE SET
            gift_name = excluded.gift_name,
            effect_type = excluded.effect_type,
@@ -1819,19 +1886,33 @@ export class DatabaseService implements OnModuleInit {
            reward_points = excluded.reward_points,
            display_message = excluded.display_message,
            duration_ms = excluded.duration_ms,
-           icon = excluded.icon`
+           icon = excluded.icon,
+           is_active = excluded.is_active`
       )
       .run(
         id,
-        dto.giftId,
-        dto.giftName,
-        dto.effectType,
+        giftIdClean,
+        giftNameClean,
+        dto.effectType || 'FIREWORKS',
         rewardType,
         rewardPoints,
-        dto.displayMessage,
-        dto.durationMs || 4000,
-        dto.icon || 'sparkles'
+        displayMessageClean,
+        durationMs,
+        icon,
+        isActiveInt
       );
+    return this.getGiftMappings();
+  }
+
+  public toggleGiftMapping(id: string, isActive: boolean) {
+    this.db
+      .prepare(`UPDATE gift_mappings SET is_active = ? WHERE id = ?`)
+      .run(isActive ? 1 : 0, id);
+    return this.getGiftMappings();
+  }
+
+  public deleteGiftMapping(id: string) {
+    this.db.prepare(`DELETE FROM gift_mappings WHERE id = ?`).run(id);
     return this.getGiftMappings();
   }
 

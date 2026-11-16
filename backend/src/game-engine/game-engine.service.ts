@@ -1002,7 +1002,7 @@ export class GameEngineService {
    */
   public handleGiftEvent(event: GameEvent) {
     const runtime = this.getOrCreateRuntime(event.roomId);
-    const mappings = this.db.getGiftMappings();
+    const mappings = this.db.getGiftMappings().filter((m) => m.isActive !== false);
 
     const matched =
       mappings.find(
@@ -1018,36 +1018,49 @@ export class GameEngineService {
         rewardPoints: 100,
         displayMessage: 'đã gửi quà tặng khuấy động sân khấu!',
         durationMs: 4000,
-        icon: 'sparkles',
+        icon: '🎁',
       };
 
-      let giftPoints = 0;
-      if (runtime.sessionId) {
-        runtime.playersMap.set(event.user.id, {
-          id: event.user.id,
-          username: event.user.username,
-          nickname: event.user.nickname,
-          avatarUrl: event.user.avatarUrl,
-        });
-        const playerRecord = this.getOrUpsertSessionPlayer(runtime, event.user);
-        if (matched.rewardType !== 'ELIMINATE_WRONG' && matched.rewardType !== 'NONE') {
-          giftPoints = this.db.addGiftPoints(
-            runtime.sessionId,
-            playerRecord.id,
-            matched.rewardPoints ?? 100
-          );
-          runtime.leaderboard = this.db.getSessionLeaderboard(runtime.sessionId);
-          this.scheduleCoalescedBroadcast(runtime, {
-            leaderboardUpdated: true,
-            roomState: true,
-          });
-        }
-      }
+    const repeatCount = Math.max(1, Number(event.payload.repeatCount || 1));
 
-    // SHARED_HINT vẫn được hỗ trợ để tương thích cấu hình cũ.
+    // Luôn ghi nhận người tặng vào danh sách người chơi của phòng
+    runtime.playersMap.set(event.user.id, {
+      id: event.user.id,
+      username: event.user.username,
+      nickname: event.user.nickname,
+      avatarUrl: event.user.avatarUrl,
+    });
+
+    let giftPoints = 0;
+    const shouldAwardPoints =
+      matched.rewardType === 'POINTS' ||
+      matched.rewardType === 'POINTS_AND_ELIMINATE';
+
+    if (runtime.sessionId) {
+      const playerRecord = this.getOrUpsertSessionPlayer(runtime, event.user);
+      if (shouldAwardPoints) {
+        const totalPointsToAdd = (matched.rewardPoints ?? 100) * repeatCount;
+        giftPoints = this.db.addGiftPoints(
+          runtime.sessionId,
+          playerRecord.id,
+          totalPointsToAdd
+        );
+        runtime.leaderboard = this.db.getSessionLeaderboard(runtime.sessionId);
+        this.scheduleCoalescedBroadcast(runtime, {
+          leaderboardUpdated: true,
+          roomState: true,
+        });
+      }
+    } else {
+      this.scheduleCoalescedBroadcast(runtime, { roomState: true });
+    }
+
+    // Xử lý loại 1 đáp án sai (ELIMINATE_WRONG / POINTS_AND_ELIMINATE / SHARED_HINT)
     let sharedHintEliminated: OptionLabel | null = null;
     if (
-      (matched.rewardType === 'ELIMINATE_WRONG' || matched.effectType === 'SHARED_HINT') &&
+      (matched.rewardType === 'ELIMINATE_WRONG' ||
+        matched.rewardType === 'POINTS_AND_ELIMINATE' ||
+        matched.effectType === 'SHARED_HINT') &&
       runtime.isQuestionOpen &&
       runtime.currentQuestionIndex >= 0
     ) {
@@ -1061,18 +1074,45 @@ export class GameEngineService {
       runtime.eliminatedHintOption = sharedHintEliminated;
     }
 
+    // Xử lý cộng thêm thời gian suy nghĩ (ADD_TIME)
+    let addedSeconds = 0;
+    if (
+      matched.rewardType === 'ADD_TIME' &&
+      runtime.isQuestionOpen &&
+      runtime.currentQuestionIndex >= 0
+    ) {
+      addedSeconds = Math.min(30, (matched.rewardPoints || 10) * repeatCount);
+      runtime.questionEndsAt += addedSeconds * 1000;
+      runtime.questionHardCloseAt += addedSeconds * 1000;
+      const nowTick = Date.now();
+      const remainingMs = Math.max(0, runtime.questionEndsAt - nowTick);
+      runtime.remainingSeconds = Math.ceil(remainingMs / 1000);
+      const q = runtime.questions[runtime.currentQuestionIndex];
+      this.realtime.emitToRoom(runtime.roomCode, 'question.timer', {
+        questionId: q.questionId,
+        questionIndex: runtime.currentQuestionIndex + 1,
+        remainingSeconds: runtime.remainingSeconds,
+        remainingMs,
+        duration: q.timeLimit + addedSeconds,
+        endsAt: runtime.questionEndsAt,
+      });
+    }
+
     const animationPayload = {
       id: event.id,
       user: event.user,
       giftId: matched.giftId,
       giftName: event.payload.giftName || matched.giftName,
-      repeatCount: event.payload.repeatCount || 1,
+      repeatCount,
       effectType: matched.effectType,
+      rewardType: matched.rewardType || 'POINTS',
+      rewardPoints: matched.rewardPoints ?? 100,
       displayMessage: matched.displayMessage,
       durationMs: matched.durationMs,
       icon: matched.icon,
       eliminatedHintOption: sharedHintEliminated,
-      giftPoints,
+      addedSeconds,
+      giftPoints: giftPoints || (shouldAwardPoints ? (matched.rewardPoints ?? 100) * repeatCount : 0),
       receivedAt: event.receivedAt,
     };
 
@@ -1081,15 +1121,21 @@ export class GameEngineService {
       type: 'GIFT',
       nickname: event.user.nickname,
       username: event.user.username,
-      summary: `tặng ${animationPayload.giftName} (${matched.effectType})`,
+      summary: `tặng ${animationPayload.giftName} ×${repeatCount}`,
     });
 
     this.realtime.emitToRoom(runtime.roomCode, 'gift.animation', animationPayload);
-    if (sharedHintEliminated) {
+    if (sharedHintEliminated || addedSeconds > 0) {
       this.scheduleCoalescedBroadcast(runtime, { roomState: true });
     }
 
     return animationPayload;
+  }
+
+  public broadcastGiftsUpdated() {
+    const gifts = this.db.getGiftMappings();
+    this.realtime.emitGlobal('gifts.updated', gifts);
+    return gifts;
   }
 
   // =====================================================================

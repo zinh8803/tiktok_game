@@ -511,6 +511,81 @@
                 />
               </div>
             </div>
+
+            <!-- CĂN VỊ TRÍ THÔNG BÁO NỔ QUÀ TRÊN MÀN HÌNH -->
+            <div style="margin-top: 0.9rem; padding-top: 0.85rem; border-top: 1px dashed rgba(255,255,255,0.14);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.55rem; flex-wrap: wrap; gap: 0.4rem;">
+                <strong style="font-size: 0.84rem; color: var(--accent-gold);">🎁 Vị Trí Thông Báo Tặng Quà (Trên Màn Hình Game)</strong>
+                <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                  <button
+                    type="button"
+                    class="btn btn-secondary"
+                    style="padding: 0.2rem 0.55rem; font-size: 0.72rem;"
+                    @click="setDashGiftPosition(50, 18)"
+                  >
+                    ⬆️ Phía Trên (18%)
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-secondary"
+                    style="padding: 0.2rem 0.55rem; font-size: 0.72rem;"
+                    @click="setDashGiftPosition(50, 32)"
+                  >
+                    🎯 Giữa Trên (32%)
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-secondary"
+                    style="padding: 0.2rem 0.55rem; font-size: 0.72rem;"
+                    @click="setDashGiftPosition(50, 48)"
+                  >
+                    🌟 Chính Giữa (48%)
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-secondary"
+                    style="padding: 0.2rem 0.55rem; font-size: 0.72rem;"
+                    @click="setDashGiftPosition(50, 78)"
+                  >
+                    ⬇️ Phía Dưới (78%)
+                  </button>
+                </div>
+              </div>
+
+              <div class="form-grid-2">
+                <div class="form-field">
+                  <label style="display: flex; justify-content: space-between;">
+                    <span>Vị trí thông báo quà Cao / Thấp (Y)</span>
+                    <strong style="color: var(--accent-cyan);">{{ dashLayoutCalib.giftPosY }}%</strong>
+                  </label>
+                  <input
+                    v-model.number="dashLayoutCalib.giftPosY"
+                    type="range"
+                    min="8"
+                    max="90"
+                    step="1"
+                    style="width: 100%; accent-color: var(--accent-gold); cursor: pointer;"
+                    @input="broadcastDashCalib"
+                  />
+                </div>
+
+                <div class="form-field">
+                  <label style="display: flex; justify-content: space-between;">
+                    <span>Cỡ bảng thông báo quà (Zoom)</span>
+                    <strong style="color: var(--accent-gold);">{{ dashLayoutCalib.giftScale }}%</strong>
+                  </label>
+                  <input
+                    v-model.number="dashLayoutCalib.giftScale"
+                    type="range"
+                    min="55"
+                    max="135"
+                    step="2"
+                    style="width: 100%; accent-color: var(--accent-gold); cursor: pointer;"
+                    @input="broadcastDashCalib"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </section>
       </div>
@@ -716,14 +791,14 @@
               <span>Giả lập tặng quà TikTok (Mục 3.4):</span>
               <div class="sim-gift-btns">
                 <button
-                  v-for="g in gifts"
-                  :key="g.giftId"
+                  v-for="g in gifts.filter((item) => item.isActive !== false)"
+                  :key="g.id || g.giftId"
                   type="button"
                   class="btn btn-secondary gift-sim-btn"
                   @click="sendSimulatedGift(g)"
                 >
                   <Sparkles :size="14" class="icon-gold" />
-                  <span>{{ g.giftName }}</span>
+                  <span>{{ g.giftName }} ({{ g.rewardType === 'ELIMINATE_WRONG' ? 'Loại 1 sai' : g.rewardType === 'ADD_TIME' ? `+${g.rewardPoints || 10}s` : g.rewardType === 'POINTS_AND_ELIMINATE' ? `+${g.rewardPoints || 100}đ & Loại sai` : g.rewardType === 'NONE' ? 'Hiệu ứng' : `+${g.rewardPoints || 100}đ` }})</span>
                 </button>
               </div>
             </div>
@@ -844,6 +919,9 @@ const dashLayoutCalib = reactive({
   offsetY: 0,
   paddingTop: 160,
   paddingBottom: 262,
+  giftPosX: 50,
+  giftPosY: 20,
+  giftScale: 95,
   preset: 'fullscreen',
 });
 
@@ -880,6 +958,9 @@ function loadDashSavedCalib() {
       dashLayoutCalib.offsetY = Number(parsed.offsetY ?? 0);
       dashLayoutCalib.paddingTop = Number(parsed.paddingTop ?? 160);
       dashLayoutCalib.paddingBottom = Number(parsed.paddingBottom ?? 262);
+      dashLayoutCalib.giftPosX = Number(parsed.giftPosX ?? 50);
+      dashLayoutCalib.giftPosY = Number(parsed.giftPosY ?? 20);
+      dashLayoutCalib.giftScale = Number(parsed.giftScale ?? 95);
       dashLayoutCalib.preset = String(parsed.preset || 'fullscreen');
     }
   } catch {
@@ -897,6 +978,9 @@ function broadcastDashCalib() {
     offsetY: dashLayoutCalib.offsetY,
     paddingTop: dashLayoutCalib.paddingTop,
     paddingBottom: dashLayoutCalib.paddingBottom,
+    giftPosX: dashLayoutCalib.giftPosX,
+    giftPosY: dashLayoutCalib.giftPosY,
+    giftScale: dashLayoutCalib.giftScale,
     preset: dashLayoutCalib.preset,
     theme: dashTheme.value,
     bgmEnabled: dashAudio.bgmEnabled,
@@ -924,6 +1008,13 @@ function broadcastDashCalib() {
     roomCode: roomCode.value,
     ...payload,
   });
+}
+
+function setDashGiftPosition(posX: number, posY: number) {
+  dashLayoutCalib.giftPosX = posX;
+  dashLayoutCalib.giftPosY = posY;
+  broadcastDashCalib();
+  showToast(`Đã chuyển vị trí thông báo quà tới Y=${posY}%!`, 'success');
 }
 
 function toggleDashBgm() {
@@ -1289,6 +1380,12 @@ onMounted(async () => {
     tiktokStatus.value = status;
   });
 
+  socket.on('gifts.updated', (updatedGifts) => {
+    if (Array.isArray(updatedGifts)) {
+      gifts.value = updatedGifts;
+    }
+  });
+
   socket.on('layout.config', (cfg) => {
     if (!cfg) return;
     if (cfg.theme && ['cute', 'modern', 'galaxy', 'luxury'].includes(cfg.theme)) {
@@ -1302,6 +1399,9 @@ onMounted(async () => {
     dashLayoutCalib.offsetY = Number(cfg.offsetY ?? dashLayoutCalib.offsetY);
     dashLayoutCalib.paddingTop = Number(cfg.paddingTop ?? dashLayoutCalib.paddingTop ?? 160);
     dashLayoutCalib.paddingBottom = Number(cfg.paddingBottom ?? dashLayoutCalib.paddingBottom ?? 262);
+    dashLayoutCalib.giftPosX = Number(cfg.giftPosX ?? dashLayoutCalib.giftPosX ?? 50);
+    dashLayoutCalib.giftPosY = Number(cfg.giftPosY ?? dashLayoutCalib.giftPosY ?? 20);
+    dashLayoutCalib.giftScale = Number(cfg.giftScale ?? dashLayoutCalib.giftScale ?? 95);
     dashLayoutCalib.preset = String(cfg.preset || dashLayoutCalib.preset);
   });
 });

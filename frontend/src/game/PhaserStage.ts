@@ -24,14 +24,26 @@ interface BurstParticle {
   shape: 'circle' | 'rect';
 }
 
+interface ShockwaveRing {
+  x: number;
+  y: number;
+  radius: number;
+  maxRadius: number;
+  alpha: number;
+  color: number;
+  lineWidth: number;
+}
+
 class StageScene extends Phaser.Scene {
   private graphics!: Phaser.GameObjects.Graphics;
   private ambientParticles: FloatingParticle[] = [];
   private burstParticles: BurstParticle[] = [];
+  private shockwaveRings: ShockwaveRing[] = [];
   private elapsed = 0;
   private primaryColor = 0xff75a0;
   private secondaryColor = 0xa855f7;
-  private spotlightIntensity = 0.14;
+  private spotlightIntensity = 0.22;
+  private spotlightBoostUntil = 0;
   private visualStyle: 'cute' | 'modern' | 'galaxy' | 'luxury' = 'cute';
 
   constructor() {
@@ -123,26 +135,37 @@ class StageScene extends Phaser.Scene {
     }
   }
 
-  public spawnFireworks(count = 3) {
+  public spawnFireworks(count = 5) {
     const w = this.scale.width;
     const h = this.scale.height;
-    const palette = [0x00f0ff, 0xfacc15, 0xc084fc, 0x34d399, 0xfb7185];
+    const palette = [0x00f0ff, 0xfacc15, 0xff4785, 0xc084fc, 0x34d399, 0xfb7185];
+    this.spotlightBoostUntil = this.elapsed + 4.0;
 
     for (let b = 0; b < count; b++) {
-      const cx = w * (0.2 + Math.random() * 0.6);
-      const cy = h * (0.18 + Math.random() * 0.38);
+      const cx = w * (0.14 + Math.random() * 0.72);
+      const cy = h * (0.2 + Math.random() * 0.55);
       const color = palette[b % palette.length];
 
-      for (let i = 0; i < 36; i++) {
-        const angle = (Math.PI * 2 * i) / 36 + (Math.random() - 0.5) * 0.15;
-        const speed = 2.2 + Math.random() * 5.2;
+      this.shockwaveRings.push({
+        x: cx,
+        y: cy,
+        radius: 10,
+        maxRadius: Math.min(w, h) * 0.36,
+        alpha: 0.9,
+        color,
+        lineWidth: 4,
+      });
+
+      for (let i = 0; i < 48; i++) {
+        const angle = (Math.PI * 2 * i) / 48 + (Math.random() - 0.5) * 0.15;
+        const speed = 2.8 + Math.random() * 6.8;
         this.burstParticles.push({
           x: cx,
           y: cy,
           vx: Math.cos(angle) * speed,
           vy: Math.sin(angle) * speed,
-          gravity: 0.06,
-          size: 3 + Math.random() * 3.5,
+          gravity: 0.055,
+          size: 4 + Math.random() * 4.5,
           alpha: 1,
           color,
           rotation: 0,
@@ -155,22 +178,63 @@ class StageScene extends Phaser.Scene {
 
   public spawnConfettiShower() {
     const w = this.scale.width;
-    const palette = [0xfacc15, 0x00f0ff, 0xf59e0b, 0x34d399, 0xe879f9];
+    const h = this.scale.height;
+    const palette = [0xfacc15, 0x00f0ff, 0xff4785, 0xf59e0b, 0x34d399, 0xe879f9];
+    this.spotlightBoostUntil = this.elapsed + 4.5;
 
-    for (let i = 0; i < 75; i++) {
+    this.shockwaveRings.push({
+      x: w * 0.5,
+      y: h * 0.45,
+      radius: 16,
+      maxRadius: Math.max(w, h) * 0.55,
+      alpha: 0.95,
+      color: 0xfacc15,
+      lineWidth: 5,
+    });
+
+    for (let i = 0; i < 110; i++) {
       this.burstParticles.push({
         x: Math.random() * w,
-        y: -15 - Math.random() * 60,
-        vx: (Math.random() - 0.5) * 3.2,
-        vy: 2 + Math.random() * 4.2,
+        y: -15 - Math.random() * 120,
+        vx: (Math.random() - 0.5) * 4.2,
+        vy: 2.5 + Math.random() * 5.2,
         gravity: 0.035,
-        size: 5 + Math.random() * 5,
+        size: 6 + Math.random() * 6,
         alpha: 1,
         color: palette[i % palette.length],
         rotation: Math.random() * Math.PI,
-        vRot: (Math.random() - 0.5) * 0.15,
+        vRot: (Math.random() - 0.5) * 0.18,
         shape: 'rect',
       });
+    }
+  }
+
+  public triggerStageGiftEffect(effectType = 'FIREWORKS') {
+    this.spotlightBoostUntil = this.elapsed + 4.8;
+    const w = this.scale.width;
+    const h = this.scale.height;
+
+    // Vòng sóng hào quang lan tỏa từ chính giữa sân khấu
+    this.shockwaveRings.push({
+      x: w * 0.5,
+      y: h * 0.46,
+      radius: 18,
+      maxRadius: Math.max(w, h) * 0.65,
+      alpha: 0.95,
+      color: effectType === 'SHARED_HINT' ? 0xfacc15 : 0x00f0ff,
+      lineWidth: 6,
+    });
+
+    if (effectType === 'CONFETTI_SHOWER') {
+      this.spawnConfettiShower();
+      setTimeout(() => this.spawnConfettiShower(), 900);
+    } else if (effectType === 'STAGE_LIGHTS' || effectType === 'SHARED_HINT') {
+      this.spawnFireworks(4);
+      this.spawnConfettiShower();
+    } else {
+      this.spawnFireworks(5);
+      setTimeout(() => this.spawnFireworks(4), 650);
+      setTimeout(() => this.spawnFireworks(4), 1350);
     }
   }
 
@@ -178,28 +242,49 @@ class StageScene extends Phaser.Scene {
     this.elapsed += delta * 0.001;
     const w = this.scale.width;
     const h = this.scale.height;
+    const isBoosted = this.elapsed < this.spotlightBoostUntil;
 
     this.graphics.clear();
 
-    // 1. Sweeping studio spotlights from top corners
-    const leftAngle = Math.sin(this.elapsed * 0.8) * 0.18;
-    const rightAngle = Math.cos(this.elapsed * 0.7) * 0.18;
+    // 1. Sweeping studio spotlights from top & bottom corners
+    const speedMult = isBoosted ? 3.2 : 0.85;
+    const leftAngle = Math.sin(this.elapsed * speedMult) * (isBoosted ? 0.34 : 0.18);
+    const rightAngle = Math.cos(this.elapsed * (speedMult * 0.9)) * (isBoosted ? 0.34 : 0.18);
+    const beamAlpha = isBoosted ? 0.32 : this.spotlightIntensity * 0.55;
 
-    this.graphics.fillStyle(this.primaryColor, this.spotlightIntensity * 0.45);
+    this.graphics.fillStyle(this.primaryColor, beamAlpha);
     this.graphics.beginPath();
-    this.graphics.moveTo(w * 0.15, 0);
-    this.graphics.lineTo(w * (0.35 + leftAngle), h);
-    this.graphics.lineTo(w * (0.05 + leftAngle), h);
+    this.graphics.moveTo(w * 0.12, 0);
+    this.graphics.lineTo(w * (0.4 + leftAngle), h);
+    this.graphics.lineTo(w * (0.04 + leftAngle), h);
     this.graphics.closePath();
     this.graphics.fillPath();
 
-    this.graphics.fillStyle(this.secondaryColor, this.spotlightIntensity * 0.45);
+    this.graphics.fillStyle(this.secondaryColor, beamAlpha);
     this.graphics.beginPath();
-    this.graphics.moveTo(w * 0.85, 0);
-    this.graphics.lineTo(w * (0.95 + rightAngle), h);
-    this.graphics.lineTo(w * (0.65 + rightAngle), h);
+    this.graphics.moveTo(w * 0.88, 0);
+    this.graphics.lineTo(w * (0.96 + rightAngle), h);
+    this.graphics.lineTo(w * (0.6 + rightAngle), h);
     this.graphics.closePath();
     this.graphics.fillPath();
+
+    if (isBoosted) {
+      this.graphics.fillStyle(0xfacc15, 0.24);
+      this.graphics.beginPath();
+      this.graphics.moveTo(0, h * 0.92);
+      this.graphics.lineTo(w * (0.65 - leftAngle), 0);
+      this.graphics.lineTo(w * (0.35 - leftAngle), 0);
+      this.graphics.closePath();
+      this.graphics.fillPath();
+
+      this.graphics.fillStyle(0xff4785, 0.24);
+      this.graphics.beginPath();
+      this.graphics.moveTo(w, h * 0.92);
+      this.graphics.lineTo(w * (0.65 - rightAngle), 0);
+      this.graphics.lineTo(w * (0.35 - rightAngle), 0);
+      this.graphics.closePath();
+      this.graphics.fillPath();
+    }
 
     // 2. Subtle stage horizon lines at the bottom (skip in cute pastel mode)
     if (this.visualStyle !== 'cute') {
@@ -226,14 +311,27 @@ class StageScene extends Phaser.Scene {
       this.graphics.fillCircle(p.x, p.y, p.radius);
     }
 
-    // 4. Fireworks & Confetti burst particles
+    // 4. Shockwave rings
+    for (let i = this.shockwaveRings.length - 1; i >= 0; i--) {
+      const ring = this.shockwaveRings[i];
+      ring.radius += (ring.maxRadius - ring.radius) * 0.08 + 5;
+      ring.alpha -= 0.018;
+      if (ring.alpha <= 0 || ring.radius >= ring.maxRadius) {
+        this.shockwaveRings.splice(i, 1);
+        continue;
+      }
+      this.graphics.lineStyle(ring.lineWidth, ring.color, Math.max(0, ring.alpha));
+      this.graphics.strokeCircle(ring.x, ring.y, ring.radius);
+    }
+
+    // 5. Fireworks & Confetti burst particles
     for (let i = this.burstParticles.length - 1; i >= 0; i--) {
       const bp = this.burstParticles[i];
       bp.x += bp.vx;
       bp.y += bp.vy;
       bp.vy += bp.gravity;
       bp.rotation += bp.vRot;
-      bp.alpha -= 0.011;
+      bp.alpha -= 0.0095;
 
       if (bp.alpha <= 0 || bp.y > h + 40) {
         this.burstParticles.splice(i, 1);
@@ -294,6 +392,10 @@ export class PhaserStageController {
 
   public triggerConfetti() {
     this.scene?.spawnConfettiShower();
+  }
+
+  public triggerStageGiftEffect(effectType = 'FIREWORKS') {
+    this.scene?.triggerStageGiftEffect(effectType);
   }
 
   public destroy() {

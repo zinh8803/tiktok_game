@@ -321,69 +321,278 @@
     <!-- TAB 3: ÁNH XẠ QUÀ TẶNG TIKTOK (GIFT MAPPINGS - MỤC 3.4) -->
     <section v-else-if="activeTab === 'gifts'" class="admin-section two-col-admin">
       <div class="panel-card">
-        <h2>Danh Sách Ánh Xạ Quà Tặng TikTok</h2>
-        <p class="panel-sub">
-          Mỗi quà tặng có thể cấu hình cộng điểm hoặc loại một đáp án sai trong câu hỏi đang mở.
-        </p>
+        <div class="panel-header-flex">
+          <div>
+            <h2>Danh Sách Cấu Hình Quà Tặng TikTok ({{ gifts.length }})</h2>
+            <p class="panel-sub">
+              Bấm <strong>"Sửa"</strong> trên từng quà tặng để chỉnh sửa chức năng, số điểm, biểu tượng hoặc thông điệp. Các quà tặng đang bật sẽ hiển thị trực tiếp trên màn hình người chơi.
+            </p>
+          </div>
+          <button
+            v-if="editingGiftRecordId"
+            type="button"
+            class="btn btn-secondary btn-sm"
+            @click="resetGiftForm"
+          >
+            + Thêm quà mới
+          </button>
+        </div>
 
         <div class="gifts-table">
-          <div v-for="g in gifts" :key="g.id" class="gift-row">
-            <div>
-              <strong>{{ g.giftName }}</strong>
-              <span class="gift-id-tag tabular-nums">Gift ID: {{ g.giftId }}</span>
-              <p>{{ g.displayMessage }}</p>
+          <div
+            v-for="g in gifts"
+            :key="g.id"
+            class="gift-row"
+            :class="{
+              'gift-row-editing': editingGiftRecordId === g.id,
+              'gift-row-inactive': g.isActive === false,
+            }"
+          >
+            <div class="gift-row-main">
+              <div class="gift-emoji-avatar">
+                {{ resolveGiftEmoji(g.icon, g.giftName) }}
+              </div>
+              <div class="gift-row-info">
+                <div class="gift-title-line">
+                  <strong>{{ g.giftName }}</strong>
+                  <span class="gift-id-tag tabular-nums">ID: {{ g.giftId }}</span>
+                  <span
+                    class="badge"
+                    :class="g.isActive !== false ? 'badge-emerald' : 'badge-rose'"
+                  >
+                    {{ g.isActive !== false ? 'Đang hiển thị' : 'Đang ẩn' }}
+                  </span>
+                </div>
+                <p class="gift-msg-preview">{{ g.displayMessage }}</p>
+                <div class="gift-badges">
+                  <span class="badge badge-cyan">
+                    🎯 Chức năng: {{ formatGiftRewardLabel(g) }}
+                  </span>
+                  <span class="badge badge-gold">
+                    ✨ Hiệu ứng: {{ formatEffectLabel(g.effectType) }}
+                  </span>
+                  <span class="badge badge-purple tabular-nums">
+                    ⏱ {{ ((g.durationMs || 4000) / 1000).toFixed(1) }}s
+                  </span>
+                </div>
+              </div>
             </div>
-            <div class="gift-badges">
-              <span class="badge badge-gold">{{ g.effectType }}</span>
-              <span class="badge badge-cyan">
-                {{ g.rewardType === 'ELIMINATE_WRONG' ? 'LOẠI ĐÁP ÁN SAI' : g.rewardType === 'POINTS' ? `+${g.rewardPoints} ĐIỂM` : 'KHÔNG THƯỞNG' }}
-              </span>
+
+            <div class="gift-row-actions">
+              <button
+                type="button"
+                class="btn btn-cyan btn-sm"
+                @click="editGiftItem(g)"
+              >
+                ✏️ Sửa
+              </button>
+              <button
+                type="button"
+                class="btn btn-secondary btn-sm"
+                @click="handleToggleGift(g)"
+              >
+                {{ g.isActive !== false ? '🙈 Ẩn' : '👁️ Hiện' }}
+              </button>
+              <button
+                type="button"
+                class="btn btn-danger btn-sm"
+                @click="handleDeleteGift(g)"
+              >
+                🗑️ Xóa
+              </button>
             </div>
+          </div>
+
+          <div v-if="!gifts.length" class="empty-gifts-box">
+            Chưa có cấu hình quà tặng nào. Hãy thêm quà tặng ở biểu mẫu bên phải!
           </div>
         </div>
       </div>
 
-      <div class="panel-card">
-        <h2>Thêm / Cập Nhật Cấu Hình Quà Tặng</h2>
+      <div class="panel-card gift-editor-panel" :class="{ 'editor-highlight': !!editingGiftRecordId }">
+        <div class="panel-header-flex">
+          <h2>
+            {{
+              editingGiftRecordId
+                ? `✏️ Chỉnh Sửa Quà Tặng: ${giftForm.giftName || ''}`
+                : '➕ Thêm Cấu Hình Quà Tặng Mới'
+            }}
+          </h2>
+          <button
+            v-if="editingGiftRecordId"
+            type="button"
+            class="btn btn-secondary btn-sm"
+            @click="resetGiftForm"
+          >
+            Hủy sửa
+          </button>
+        </div>
+
+        <!-- Mẫu điền nhanh quà TikTok phổ biến -->
+        <div class="preset-gifts-box">
+          <span class="preset-label">Chọn nhanh mẫu quà TikTok:</span>
+          <div class="preset-chips">
+            <button
+              v-for="preset in tiktokGiftPresets"
+              :key="preset.giftId"
+              type="button"
+              class="preset-chip-btn"
+              @click="applyGiftPreset(preset)"
+            >
+              <span>{{ preset.icon }}</span>
+              <span>{{ preset.giftName }}</span>
+              <small>({{ preset.giftId }})</small>
+            </button>
+          </div>
+        </div>
+
         <form class="q-form" @submit.prevent="saveGiftMapping">
-          <div>
-            <label>TikTok Gift ID</label>
-            <input v-model="giftForm.giftId" class="input-control" placeholder="VD: 5655" required />
+          <div class="form-row-2">
+            <div>
+              <label>TikTok Gift ID (hoặc từ khóa tên quà)</label>
+              <input
+                v-model="giftForm.giftId"
+                class="input-control"
+                placeholder="VD: 5655"
+                required
+              />
+            </div>
+            <div>
+              <label>Tên hiển thị quà tặng</label>
+              <input
+                v-model="giftForm.giftName"
+                class="input-control"
+                placeholder="VD: Hoa Hồng (Rose)"
+                required
+              />
+            </div>
           </div>
+
+          <!-- Chọn Icon / Emoji hiển thị trên màn hình User -->
           <div>
-            <label>Tên quà tặng</label>
-            <input v-model="giftForm.giftName" class="input-control" placeholder="VD: Hoa Hồng" required />
+            <label>Biểu tượng (Emoji hiển thị trên màn hình người chơi)</label>
+            <div class="emoji-picker-row">
+              <input
+                v-model="giftForm.icon"
+                class="input-control emoji-input"
+                placeholder="🌹"
+                maxlength="8"
+              />
+              <div class="emoji-quick-list">
+                <button
+                  v-for="emo in giftEmojiOptions"
+                  :key="emo"
+                  type="button"
+                  class="emoji-choice-btn"
+                  :class="{ active: giftForm.icon === emo }"
+                  @click="giftForm.icon = emo"
+                >
+                  {{ emo }}
+                </button>
+              </div>
+            </div>
           </div>
+
+          <div class="form-row-2">
+            <div>
+              <label>Chức năng của quà tặng trong Game</label>
+              <select v-model="giftForm.rewardType" class="select-control" @change="onRewardTypeChange">
+                <option value="POINTS">⚡ Cộng điểm cho người tặng</option>
+                <option value="ELIMINATE_WRONG">🎯 Loại trừ 1 đáp án sai (Trợ giúp 50/50)</option>
+                <option value="POINTS_AND_ELIMINATE">🔥 Vừa cộng điểm + Vừa loại 1 đáp án sai</option>
+                <option value="ADD_TIME">⏱️ Cộng thêm giây suy nghĩ cho câu đang mở</option>
+                <option value="NONE">✨ Chỉ phát hiệu ứng vinh danh sân khấu</option>
+              </select>
+            </div>
+
+            <div>
+              <label>Hiệu ứng sân khấu khi nhận quà</label>
+              <select v-model="giftForm.effectType" class="select-control">
+                <option value="FIREWORKS">🎆 Pháo hoa đại tiệc (FIREWORKS)</option>
+                <option value="STAGE_LIGHTS">⚡ Ánh sáng hào quang (STAGE_LIGHTS)</option>
+                <option value="CHEER_BANNER">🎉 Băng rôn cổ vũ (CHEER_BANNER)</option>
+                <option value="SHARED_HINT">💡 Ngôi sao gợi ý (SHARED_HINT)</option>
+                <option value="CONFETTI_SHOWER">🎊 Mưa kim tuyến (CONFETTI_SHOWER)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Cấu hình số điểm hoặc số giây cộng thêm -->
+          <div
+            v-if="
+              giftForm.rewardType === 'POINTS' ||
+              giftForm.rewardType === 'POINTS_AND_ELIMINATE' ||
+              giftForm.rewardType === 'ADD_TIME'
+            "
+            class="reward-value-box"
+          >
+            <label>
+              {{
+                giftForm.rewardType === 'ADD_TIME'
+                  ? 'Số giây cộng thêm cho câu hỏi (Mỗi 1 quà)'
+                  : 'Số điểm cộng trực tiếp cho người tặng (Mỗi 1 quà)'
+              }}
+            </label>
+            <div class="reward-input-with-chips">
+              <input
+                v-model.number="giftForm.rewardPoints"
+                type="number"
+                min="1"
+                step="1"
+                class="input-control"
+                required
+              />
+              <div v-if="giftForm.rewardType === 'ADD_TIME'" class="quick-pts-chips">
+                <button
+                  v-for="sec in [5, 10, 15, 20]"
+                  :key="sec"
+                  type="button"
+                  class="chip-val-btn"
+                  :class="{ active: giftForm.rewardPoints === sec }"
+                  @click="giftForm.rewardPoints = sec"
+                >
+                  +{{ sec }}s
+                </button>
+              </div>
+              <div v-else class="quick-pts-chips">
+                <button
+                  v-for="pts in [50, 100, 200, 300, 500, 1000]"
+                  :key="pts"
+                  type="button"
+                  class="chip-val-btn"
+                  :class="{ active: giftForm.rewardPoints === pts }"
+                  @click="giftForm.rewardPoints = pts"
+                >
+                  +{{ pts }}đ
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-row-2">
+            <div>
+              <label>Thời lượng hiển thị trên màn hình (ms)</label>
+              <input
+                v-model.number="giftForm.durationMs"
+                type="number"
+                min="1500"
+                max="15000"
+                step="500"
+                class="input-control"
+                required
+              />
+            </div>
+            <div>
+              <label>Trạng thái hiển thị trên màn hình User</label>
+              <select v-model="giftForm.isActive" class="select-control">
+                <option :value="true">✅ Bật (Hiển thị & kích hoạt trong game)</option>
+                <option :value="false">🙈 Tắt (Tạm ẩn khỏi màn hình user)</option>
+              </select>
+            </div>
+          </div>
+
           <div>
-            <label>Hiệu ứng kích hoạt trên màn hình Game Show</label>
-            <select v-model="giftForm.effectType" class="select-control">
-              <option value="FIREWORKS">FIREWORKS (Pháo hoa sân khấu)</option>
-              <option value="STAGE_LIGHTS">STAGE_LIGHTS (Ánh sáng hào quang)</option>
-              <option value="CHEER_BANNER">CHEER_BANNER (Lời cổ vũ toàn trường quay)</option>
-              <option value="SHARED_HINT">SHARED_HINT (Gợi ý loại 1 đáp án sai cho tất cả)</option>
-            </select>
-          </div>
-          <div>
-            <label>Hành động thưởng</label>
-            <select v-model="giftForm.rewardType" class="select-control">
-              <option value="POINTS">Cộng điểm cho người gửi</option>
-              <option value="ELIMINATE_WRONG">Loại 1 đáp án sai cho người chơi</option>
-              <option value="NONE">Chỉ hiệu ứng, không cộng điểm</option>
-            </select>
-          </div>
-          <div v-if="giftForm.rewardType === 'POINTS'">
-            <label>Số điểm cộng</label>
-            <input
-              v-model.number="giftForm.rewardPoints"
-              type="number"
-              min="1"
-              step="1"
-              class="input-control"
-              required
-            />
-          </div>
-          <div>
-            <label>Thông điệp hiển thị trên màn hình</label>
+            <label>Thông điệp vinh danh khi người chơi tặng quà</label>
             <input
               v-model="giftForm.displayMessage"
               class="input-control"
@@ -391,7 +600,35 @@
               required
             />
           </div>
-          <button type="submit" class="btn btn-gold">Lưu ánh xạ quà tặng</button>
+
+          <!-- Xem trước thẻ hiển thị trên màn hình User -->
+          <div class="user-gift-preview-card">
+            <span class="preview-caption">👁️ Xem trước hiển thị trên màn hình người chơi:</span>
+            <div class="preview-gift-pill">
+              <span class="preview-gift-emoji">{{ resolveGiftEmoji(giftForm.icon, giftForm.giftName) }}</span>
+              <div class="preview-gift-texts">
+                <strong>{{ giftForm.giftName || 'Tên quà tặng' }}</strong>
+                <span class="preview-gift-func">{{ formatGiftRewardLabel(giftForm) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-gold">
+              <Save :size="16" />
+              <span>{{
+                editingGiftRecordId ? 'Lưu cập nhật cấu hình quà tặng' : 'Thêm cấu hình quà tặng mới'
+              }}</span>
+            </button>
+            <button
+              v-if="editingGiftRecordId"
+              type="button"
+              class="btn btn-secondary"
+              @click="resetGiftForm"
+            >
+              Hủy
+            </button>
+          </div>
         </form>
       </div>
     </section>
@@ -464,14 +701,135 @@ const qForm = reactive({
   status: 'PUBLISHED',
 });
 
+const editingGiftRecordId = ref<string | null>(null);
+const giftEmojiOptions = ['🌹', '🎆', '⚡', '🌟', '👑', '🍦', '💖', '🦁', '🚀', '💎', '🔥', '🎁'];
+
+const tiktokGiftPresets = [
+  {
+    giftId: '5655',
+    giftName: 'Hoa Hồng (Rose)',
+    icon: '🌹',
+    effectType: 'CHEER_BANNER',
+    rewardType: 'POINTS',
+    rewardPoints: 100,
+    durationMs: 3500,
+    displayMessage: 'đã gửi Hoa Hồng cổ vũ toàn trường quay!',
+  },
+  {
+    giftId: '5879',
+    giftName: 'Tim Tay (Finger Heart)',
+    icon: '💖',
+    effectType: 'STAGE_LIGHTS',
+    rewardType: 'POINTS',
+    rewardPoints: 150,
+    durationMs: 4000,
+    displayMessage: 'đã thả Tim Tay thắp sáng sân khấu Game Show!',
+  },
+  {
+    giftId: '5827',
+    giftName: 'Kem Ốc Quế',
+    icon: '🍦',
+    effectType: 'CONFETTI_SHOWER',
+    rewardType: 'ADD_TIME',
+    rewardPoints: 10,
+    durationMs: 4000,
+    displayMessage: 'đã tặng Kem Ốc Quế tiếp thêm thời gian suy nghĩ!',
+  },
+  {
+    giftId: '5269',
+    giftName: 'Pháo Hoa Sân Khấu',
+    icon: '🎆',
+    effectType: 'FIREWORKS',
+    rewardType: 'POINTS',
+    rewardPoints: 300,
+    durationMs: 5000,
+    displayMessage: 'đã kích hoạt Đại Tiệc Pháo Hoa rực rỡ!',
+  },
+  {
+    giftId: '9999',
+    giftName: 'Ngôi Sao Tri Thức',
+    icon: '🌟',
+    effectType: 'SHARED_HINT',
+    rewardType: 'ELIMINATE_WRONG',
+    rewardPoints: 0,
+    durationMs: 5500,
+    displayMessage: 'đã mở Gợi Ý Chung (Loại trừ 1 đáp án sai) cho tất cả người chơi!',
+  },
+  {
+    giftId: '5658',
+    giftName: 'Vương Miện Hoàng Gia',
+    icon: '👑',
+    effectType: 'FIREWORKS',
+    rewardType: 'POINTS_AND_ELIMINATE',
+    rewardPoints: 500,
+    durationMs: 6000,
+    displayMessage: 'đã trao Vương Miện Hoàng Gia: vừa cộng điểm khủng vừa mở gợi ý!',
+  },
+];
+
 const giftForm = reactive({
   giftId: '',
   giftName: '',
+  icon: '🌹',
   effectType: 'FIREWORKS',
   rewardType: 'POINTS',
   rewardPoints: 100,
+  durationMs: 4000,
+  isActive: true,
   displayMessage: 'đã khuấy động sân khấu bằng quà tặng đặc biệt!',
 });
+
+function resolveGiftEmoji(icon?: string, giftName?: string): string {
+  const map: Record<string, string> = {
+    flower: '🌹',
+    sparkles: '🎆',
+    zap: '⚡',
+    lightbulb: '🌟',
+    crown: '👑',
+    heart: '💖',
+    icecream: '🍦',
+    lion: '🦁',
+    rocket: '🚀',
+    diamond: '💎',
+    fire: '🔥',
+    gift: '🎁',
+  };
+  if (icon && map[icon.toLowerCase()]) return map[icon.toLowerCase()];
+  if (icon && icon.trim().length <= 8 && !/^[a-zA-Z]+$/.test(icon.trim())) {
+    return icon.trim();
+  }
+  const lower = (giftName || '').toLowerCase();
+  if (lower.includes('hồng') || lower.includes('rose')) return '🌹';
+  if (lower.includes('pháo') || lower.includes('firework')) return '🎆';
+  if (lower.includes('ánh sáng')) return '⚡';
+  if (lower.includes('tim') || lower.includes('heart')) return '💖';
+  if (lower.includes('sao') || lower.includes('gợi ý')) return '🌟';
+  if (lower.includes('vương miện') || lower.includes('crown')) return '👑';
+  if (lower.includes('kem')) return '🍦';
+  if (lower.includes('sư tử') || lower.includes('lion')) return '🦁';
+  return '🎁';
+}
+
+function formatGiftRewardLabel(g: any): string {
+  const rType = g?.rewardType || 'POINTS';
+  const pts = g?.rewardPoints ?? 100;
+  if (rType === 'ELIMINATE_WRONG') return 'Loại 1 đáp án sai';
+  if (rType === 'POINTS_AND_ELIMINATE') return `+${pts} Điểm & Loại 1 sai`;
+  if (rType === 'ADD_TIME') return `+${pts || 10} giây suy nghĩ`;
+  if (rType === 'NONE') return 'Hiệu ứng vinh danh';
+  return `+${pts} Điểm`;
+}
+
+function formatEffectLabel(effectType?: string): string {
+  const map: Record<string, string> = {
+    FIREWORKS: 'Pháo hoa',
+    STAGE_LIGHTS: 'Ánh sáng',
+    CHEER_BANNER: 'Băng rôn cổ vũ',
+    SHARED_HINT: 'Gợi ý 50/50',
+    CONFETTI_SHOWER: 'Mưa kim tuyến',
+  };
+  return map[effectType || ''] || effectType || 'Pháo hoa';
+}
 
 const bulkJsonText = ref(
   JSON.stringify(
@@ -607,13 +965,96 @@ async function handleGenerateRandom(count = 10, targetStatus = 'PUBLISHED') {
   }
 }
 
-async function saveGiftMapping() {
-  gifts.value = await api.upsertGift({ ...giftForm });
-  statusNotice.value = `Đã lưu cấu hình quà tặng ${giftForm.giftName}`;
+function resetGiftForm() {
+  editingGiftRecordId.value = null;
   giftForm.giftId = '';
   giftForm.giftName = '';
+  giftForm.icon = '🌹';
+  giftForm.effectType = 'FIREWORKS';
   giftForm.rewardType = 'POINTS';
   giftForm.rewardPoints = 100;
+  giftForm.durationMs = 4000;
+  giftForm.isActive = true;
+  giftForm.displayMessage = 'đã khuấy động sân khấu bằng quà tặng đặc biệt!';
+}
+
+function editGiftItem(g: any) {
+  editingGiftRecordId.value = g.id;
+  giftForm.giftId = g.giftId || '';
+  giftForm.giftName = g.giftName || '';
+  giftForm.icon = resolveGiftEmoji(g.icon, g.giftName);
+  giftForm.effectType = g.effectType || 'FIREWORKS';
+  giftForm.rewardType = g.rewardType || 'POINTS';
+  giftForm.rewardPoints =
+    g.rewardType === 'ADD_TIME'
+      ? Number(g.rewardPoints || 10)
+      : Number(g.rewardPoints || 100);
+  giftForm.durationMs = Number(g.durationMs || 4000);
+  giftForm.isActive = g.isActive !== false;
+  giftForm.displayMessage =
+    g.displayMessage || 'đã gửi quà tặng cổ vũ toàn trường quay!';
+}
+
+function applyGiftPreset(preset: any) {
+  giftForm.giftId = preset.giftId;
+  giftForm.giftName = preset.giftName;
+  giftForm.icon = preset.icon;
+  giftForm.effectType = preset.effectType;
+  giftForm.rewardType = preset.rewardType;
+  giftForm.rewardPoints = preset.rewardPoints;
+  giftForm.durationMs = preset.durationMs;
+  giftForm.displayMessage = preset.displayMessage;
+  giftForm.isActive = true;
+}
+
+function onRewardTypeChange() {
+  if (giftForm.rewardType === 'ADD_TIME' && giftForm.rewardPoints > 30) {
+    giftForm.rewardPoints = 10;
+  } else if (
+    (giftForm.rewardType === 'POINTS' ||
+      giftForm.rewardType === 'POINTS_AND_ELIMINATE') &&
+    giftForm.rewardPoints <= 0
+  ) {
+    giftForm.rewardPoints = 100;
+  }
+}
+
+async function saveGiftMapping() {
+  try {
+    const payload = { ...giftForm };
+    if (editingGiftRecordId.value) {
+      gifts.value = await api.updateGift(editingGiftRecordId.value, payload);
+      statusNotice.value = `Đã cập nhật cấu hình quà tặng "${giftForm.giftName}" thành công!`;
+    } else {
+      gifts.value = await api.upsertGift(payload);
+      statusNotice.value = `Đã thêm cấu hình quà tặng "${giftForm.giftName}" thành công!`;
+    }
+    resetGiftForm();
+  } catch (err: any) {
+    statusNotice.value = `Lỗi lưu quà tặng: ${err.message}`;
+  }
+}
+
+async function handleToggleGift(g: any) {
+  try {
+    const nextState = g.isActive === false;
+    gifts.value = await api.toggleGift(g.id, nextState);
+    statusNotice.value = `${nextState ? 'Đã bật hiển thị' : 'Đã ẩn'} quà tặng "${g.giftName}" trên màn hình người chơi!`;
+  } catch (err: any) {
+    statusNotice.value = `Lỗi cập nhật trạng thái: ${err.message}`;
+  }
+}
+
+async function handleDeleteGift(g: any) {
+  try {
+    gifts.value = await api.deleteGift(g.id);
+    if (editingGiftRecordId.value === g.id) {
+      resetGiftForm();
+    }
+    statusNotice.value = `Đã xóa cấu hình quà tặng "${g.giftName}"`;
+  } catch (err: any) {
+    statusNotice.value = `Lỗi xóa quà tặng: ${err.message}`;
+  }
 }
 
 onMounted(() => {
@@ -872,24 +1313,296 @@ onMounted(() => {
   gap: 0.75rem;
 }
 
+.panel-header-flex {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
 .gift-row,
 .review-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.85rem 1rem;
-  border-radius: 0.75rem;
-  background: rgba(8, 12, 28, 0.72);
+  gap: 1rem;
+  padding: 0.95rem 1.1rem;
+  border-radius: 0.85rem;
+  background: rgba(8, 12, 28, 0.76);
   border: 1px solid var(--border-subtle);
+  transition: all 0.2s ease;
+}
+
+.gift-row:hover {
+  border-color: rgba(0, 240, 255, 0.45);
+}
+
+.gift-row-editing {
+  border-color: var(--accent-gold);
+  background: rgba(250, 204, 21, 0.08);
+  box-shadow: 0 0 18px rgba(250, 204, 21, 0.16);
+}
+
+.gift-row-inactive {
+  opacity: 0.6;
+}
+
+.gift-row-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.gift-emoji-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 0.8rem;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.55rem;
+  flex-shrink: 0;
+}
+
+.gift-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.gift-title-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
 }
 
 .gift-id-tag {
-  margin-left: 0.5rem;
   font-size: 0.76rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 0.35rem;
+  background: rgba(0, 240, 255, 0.12);
   color: var(--accent-cyan);
 }
 
-.gift-row p,
+.gift-msg-preview {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.gift-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.2rem;
+}
+
+.gift-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+}
+
+.gift-editor-panel.editor-highlight {
+  border-color: var(--accent-gold);
+  box-shadow: 0 0 24px rgba(250, 204, 21, 0.14);
+}
+
+.preset-gifts-box {
+  background: rgba(8, 12, 28, 0.68);
+  border: 1px dashed rgba(0, 240, 255, 0.3);
+  border-radius: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.preset-label {
+  display: block;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  margin-bottom: 0.45rem;
+}
+
+.preset-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.preset-chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.32rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #e2f1ff;
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.preset-chip-btn:hover {
+  background: rgba(0, 240, 255, 0.16);
+  border-color: var(--accent-cyan);
+  transform: translateY(-1px);
+}
+
+.preset-chip-btn small {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+.emoji-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.emoji-input {
+  width: 72px;
+  text-align: center;
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.emoji-quick-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.emoji-choice-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 0.55rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: 1.15rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.emoji-choice-btn:hover,
+.emoji-choice-btn.active {
+  background: rgba(0, 240, 255, 0.22);
+  border-color: var(--accent-cyan);
+  transform: scale(1.08);
+}
+
+.reward-value-box {
+  background: rgba(0, 240, 255, 0.06);
+  border: 1px solid rgba(0, 240, 255, 0.24);
+  border-radius: 0.75rem;
+  padding: 0.75rem 0.9rem;
+}
+
+.reward-input-with-chips {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.reward-input-with-chips .input-control {
+  width: 120px;
+}
+
+.quick-pts-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.chip-val-btn {
+  padding: 0.32rem 0.65rem;
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #e2f1ff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.chip-val-btn:hover,
+.chip-val-btn.active {
+  background: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  color: #071026;
+}
+
+.user-gift-preview-card {
+  background: rgba(13, 17, 39, 0.85);
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  border-radius: 0.8rem;
+  padding: 0.75rem 0.95rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.preview-caption {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.preview-gift-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 0.7rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+}
+
+.preview-gift-emoji {
+  font-size: 1.4rem;
+}
+
+.preview-gift-texts {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.preview-gift-texts strong {
+  font-size: 0.82rem;
+  color: #ffffff;
+}
+
+.preview-gift-func {
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: var(--accent-gold);
+}
+
+.empty-gifts-box {
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
 .rev-main p {
   font-size: 0.84rem;
   color: var(--text-secondary);

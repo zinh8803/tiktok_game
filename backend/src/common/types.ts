@@ -32,7 +32,12 @@ export type GiftEffectType =
   | 'SHARED_HINT'
   | 'CONFETTI_SHOWER';
 
-export type GiftRewardType = 'POINTS' | 'ELIMINATE_WRONG' | 'NONE';
+export type GiftRewardType =
+  | 'POINTS'
+  | 'ELIMINATE_WRONG'
+  | 'POINTS_AND_ELIMINATE'
+  | 'ADD_TIME'
+  | 'NONE';
 
 /**
  * Định dạng sự kiện nội bộ chuẩn hóa (Mục 5.2)

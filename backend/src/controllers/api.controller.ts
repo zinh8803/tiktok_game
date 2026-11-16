@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpException,
   HttpStatus,
@@ -295,7 +296,34 @@ export class ApiController {
 
   @Post('gifts')
   upsertGift(@Body() body: any) {
-    return this.db.upsertGiftMapping(body);
+    try {
+      this.db.upsertGiftMapping(body);
+      return this.gameEngine.broadcastGiftsUpdated();
+    } catch (err: any) {
+      throw new HttpException(err.message || 'Lỗi lưu cấu hình quà tặng', HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  @Put('gifts/:id')
+  updateGift(@Param('id') id: string, @Body() body: any) {
+    try {
+      this.db.upsertGiftMapping({ ...body, id });
+      return this.gameEngine.broadcastGiftsUpdated();
+    } catch (err: any) {
+      throw new HttpException(err.message || 'Lỗi cập nhật quà tặng', HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  @Patch('gifts/:id/toggle')
+  toggleGift(@Param('id') id: string, @Body() body: { isActive: boolean }) {
+    this.db.toggleGiftMapping(id, Boolean(body?.isActive));
+    return this.gameEngine.broadcastGiftsUpdated();
+  }
+
+  @Delete('gifts/:id')
+  deleteGift(@Param('id') id: string) {
+    this.db.deleteGiftMapping(id);
+    return this.gameEngine.broadcastGiftsUpdated();
   }
 }
 

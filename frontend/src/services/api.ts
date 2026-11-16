@@ -121,5 +121,19 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  updateGift: (id: string, payload: any) =>
+    request<any>(`/gifts/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  toggleGift: (id: string, isActive: boolean) =>
+    request<any>(`/gifts/${id}/toggle`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isActive }),
+    }),
+  deleteGift: (id: string) =>
+    request<any>(`/gifts/${id}`, {
+      method: 'DELETE',
+    }),
 };
 

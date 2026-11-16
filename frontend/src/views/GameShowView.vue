@@ -349,6 +349,101 @@
             @input="onManualCalibChange"
           />
         </div>
+
+        <!-- CÀI ĐẶT VỊ TRÍ & CỠ THÔNG BÁO TẶNG QUÀ -->
+        <div class="calib-gift-pos-section">
+          <div class="calib-popup-header">
+            <strong>🎁 Vị Trí Thông Báo Nổ Quà</strong>
+            <button
+              type="button"
+              class="calib-preview-gift-btn"
+              :class="{ active: isPreviewingGiftPos }"
+              @click="toggleGiftCalloutPreview"
+            >
+              {{ isPreviewingGiftPos ? '🙈 Tắt xem thử' : '👁️ Xem thử & Kéo thả' }}
+            </button>
+          </div>
+
+          <div class="calib-gift-presets-row">
+            <button
+              type="button"
+              class="calib-preset-btn"
+              :class="{ active: Math.abs((layoutCalib.giftPosY ?? 20) - 18) <= 3 }"
+              @click="setGiftCalloutPosition(50, 18)"
+            >
+              ⬆️ Phía Trên
+            </button>
+            <button
+              type="button"
+              class="calib-preset-btn"
+              :class="{ active: Math.abs((layoutCalib.giftPosY ?? 20) - 32) <= 3 }"
+              @click="setGiftCalloutPosition(50, 32)"
+            >
+              🎯 Giữa Trên
+            </button>
+            <button
+              type="button"
+              class="calib-preset-btn"
+              :class="{ active: Math.abs((layoutCalib.giftPosY ?? 20) - 48) <= 3 }"
+              @click="setGiftCalloutPosition(50, 48)"
+            >
+              🌟 Chính Giữa
+            </button>
+            <button
+              type="button"
+              class="calib-preset-btn"
+              :class="{ active: Math.abs((layoutCalib.giftPosY ?? 20) - 78) <= 4 }"
+              @click="setGiftCalloutPosition(50, 78)"
+            >
+              ⬇️ Phía Dưới
+            </button>
+          </div>
+
+          <div class="calib-slider-group">
+            <label>
+              <span>Vị trí Cao / Thấp (Y)</span>
+              <strong>{{ layoutCalib.giftPosY ?? 20 }}%</strong>
+            </label>
+            <input
+              v-model.number="layoutCalib.giftPosY"
+              type="range"
+              min="8"
+              max="90"
+              step="1"
+              @input="onGiftPosSliderChange"
+            />
+          </div>
+
+          <div class="calib-slider-group">
+            <label>
+              <span>Vị trí Trái / Phải (X)</span>
+              <strong>{{ layoutCalib.giftPosX ?? 50 }}%</strong>
+            </label>
+            <input
+              v-model.number="layoutCalib.giftPosX"
+              type="range"
+              min="15"
+              max="85"
+              step="1"
+              @input="onGiftPosSliderChange"
+            />
+          </div>
+
+          <div class="calib-slider-group">
+            <label>
+              <span>Kích cỡ bảng thông báo quà</span>
+              <strong>{{ layoutCalib.giftScale ?? 95 }}%</strong>
+            </label>
+            <input
+              v-model.number="layoutCalib.giftScale"
+              type="range"
+              min="55"
+              max="135"
+              step="2"
+              @input="onGiftPosSliderChange"
+            />
+          </div>
+        </div>
       </div>
     </div>
 
@@ -360,20 +455,111 @@
         'frame-fullscreen': layoutCalib.preset === 'fullscreen',
         'frame-safe-zone': layoutCalib.preset === 'tiktok-safe-zone',
         'frame-box-362x444': layoutCalib.preset === '362x444',
+        'frame-gift-celebrating': !!displayedGiftBanner,
       }"
       :style="broadcastFrameStyle"
     >
-      <!-- Top Broadcast Header (Tích hợp thông báo Quà tặng gọn trên thanh Header, không bao giờ che câu hỏi) -->
-      <header class="stage-header" :class="{ 'header-gift-active': !!activeGiftBanner }">
-        <div v-if="activeGiftBanner" class="gift-inline-ticker">
-          <Sparkles :size="14" class="icon-gold" style="flex-shrink: 0;" />
-          <div class="gift-inline-text">
-            <strong>{{ activeGiftBanner.user?.nickname }}</strong>
-            <span>tặng {{ activeGiftBanner.giftName }} ×{{ activeGiftBanner.repeatCount || 1 }}</span>
-            <em v-if="activeGiftBanner.displayMessage">— {{ activeGiftBanner.displayMessage }}</em>
+      <!-- HIỆU ỨNG SÂN KHẤU TIỀN CẢNH RỰC RỠ & BANNER NGƯỜI TẶNG QUÀ TÙY CHỈNH VỊ TRÍ -->
+      <transition name="gift-stage-pop">
+        <div
+          v-if="displayedGiftBanner"
+          :key="displayedGiftBanner.id || displayedGiftBanner.receivedAt"
+          class="gift-stage-celebration-layer"
+          :class="`fx-mode-${(displayedGiftBanner.effectType || 'FIREWORKS').toLowerCase()}`"
+        >
+          <!-- 4 Luồng đèn Laser Sân Khấu quét tiền cảnh -->
+          <div class="fx-laser-beam fx-beam-1"></div>
+          <div class="fx-laser-beam fx-beam-2"></div>
+          <div class="fx-laser-beam fx-beam-3"></div>
+          <div class="fx-laser-beam fx-beam-4"></div>
+
+          <!-- Vòng sóng năng lượng lan tỏa tại đúng tâm điểm thông báo quà -->
+          <div class="fx-shockwave-ring" :style="giftOriginPositionStyle"></div>
+          <div class="fx-shockwave-ring fx-ring-delay" :style="giftOriginPositionStyle"></div>
+
+          <!-- Pháo hoa, Kim tuyến & Emoji quà tặng nổ rực rỡ tại tâm điểm thông báo quà -->
+          <div class="fx-particles-container">
+            <span
+              v-for="n in 18"
+              :key="`fx-p-${n}`"
+              class="fx-burst-item"
+              :class="`fx-p-${n}`"
+              :style="giftOriginPositionStyle"
+            >
+              {{
+                n % 3 === 0
+                  ? resolveGiftEmoji(displayedGiftBanner.icon, displayedGiftBanner.giftName)
+                  : n % 3 === 1
+                    ? '✨'
+                    : '🎉'
+              }}
+            </span>
+          </div>
+
+          <!-- THẺ VINH DANH NGƯỜI TẶNG QUÀ (HỖ TRỢ KÉO THẢ & CHỈNH VỊ TRÍ TỰ DO) -->
+          <div
+            class="gift-center-stage-callout"
+            :class="{
+              'callout-draggable': showCalibPanel || isPreviewingGiftPos,
+              'callout-is-dragging': isDraggingGiftCallout,
+            }"
+            :style="giftCalloutPositionStyle"
+            @pointerdown="startDragGiftCallout"
+          >
+            <div class="callout-glow-backdrop"></div>
+            <div class="callout-top-ribbon">
+              <span>{{
+                showCalibPanel || isPreviewingGiftPos
+                  ? '✥ KÉO THẢ ĐỂ ĐẶT VỊ TRÍ THÔNG BÁO QUÀ ✥'
+                  : '👑 QUÀ TẶNG SÂN KHẤU VIP 👑'
+              }}</span>
+            </div>
+
+            <div class="callout-main-body">
+              <div class="callout-sender-avatar-wrap">
+                <img
+                  class="callout-sender-avatar"
+                  :src="resolveAvatarSrc(displayedGiftBanner.user)"
+                  :alt="displayedGiftBanner.user?.nickname"
+                  referrerpolicy="no-referrer"
+                  @error="markAvatarFailed(displayedGiftBanner.user)"
+                />
+                <span class="callout-avatar-crown">👑</span>
+              </div>
+
+              <div class="callout-sender-details">
+                <div class="callout-sender-name">
+                  {{ displayedGiftBanner.user?.nickname || 'Người chơi' }}
+                </div>
+                <div class="callout-gift-line">
+                  <span>tặng</span>
+                  <strong class="callout-gift-title">{{ displayedGiftBanner.giftName }}</strong>
+                  <span class="callout-combo-count tabular-nums">
+                    ×{{ displayedGiftBanner.repeatCount || 1 }}
+                  </span>
+                </div>
+              </div>
+
+              <div class="callout-big-emoji">
+                {{ resolveGiftEmoji(displayedGiftBanner.icon, displayedGiftBanner.giftName) }}
+              </div>
+            </div>
+
+            <!-- Huy hiệu chức năng kích hoạt cực lớn -->
+            <div class="callout-action-banner">
+              <span>{{ formatTriggeredGiftAction(displayedGiftBanner) }}</span>
+            </div>
+
+            <p v-if="displayedGiftBanner.displayMessage" class="callout-sub-message">
+              “{{ displayedGiftBanner.displayMessage }}”
+            </p>
           </div>
         </div>
-        <div v-else class="brand-cluster">
+      </transition>
+
+      <!-- Top Broadcast Header -->
+      <header class="stage-header">
+        <div class="brand-cluster">
           <div class="live-indicator">
             <span class="pulse-dot"></span>
             <span>LIVE</span>
@@ -382,7 +568,7 @@
         </div>
 
         <div class="header-metrics tabular-nums">
-          <div v-if="!activeGiftBanner" class="metric-pill">
+          <div class="metric-pill">
             <Users :size="14" />
             <span>{{ roomState?.playerCount || 0 }} người chơi</span>
           </div>
@@ -680,8 +866,42 @@
           </div>
         </section>
 
-        <!-- Compact Leaderboard & Ticker Strip -->
+        <!-- Compact Gifts Guide & Leaderboard Strip -->
         <aside class="sidebar-leaderboard">
+          <!-- BẢNG QUÀ TẶNG & CHỨC NĂNG TRỢ GIÚP CHO NGƯỜI CHƠI -->
+          <div v-if="activeGifts.length" class="sidebar-card gift-showcase-card">
+            <div class="sidebar-header gift-showcase-header">
+              <div class="gift-header-left">
+                <Sparkles :size="15" class="icon-gold" />
+                <h3>Quà Tặng & Chức Năng</h3>
+              </div>
+              <span class="gift-header-hint">Gửi quà để kích hoạt</span>
+            </div>
+
+            <div class="user-gifts-grid tabular-nums">
+              <div
+                v-for="g in activeGifts"
+                :key="g.id || g.giftId"
+                class="user-gift-item"
+                :class="`gift-func-${(g.rewardType || 'POINTS').toLowerCase()}`"
+              >
+                <div class="user-gift-emoji">
+                  {{ resolveGiftEmoji(g.icon, g.giftName) }}
+                </div>
+                <div class="user-gift-info">
+                  <strong class="user-gift-name">{{ g.giftName }}</strong>
+                  <span
+                    class="user-gift-badge"
+                    :class="giftRewardBadgeClass(g.rewardType)"
+                  >
+                    {{ formatUserGiftFunction(g) }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- BẢNG TOP XẾP HẠNG -->
           <div class="sidebar-card">
             <div class="sidebar-header">
               <Trophy :size="15" class="icon-gold" />
@@ -690,7 +910,7 @@
 
             <div v-if="leaderboard.length" class="mini-lb-list tabular-nums">
               <div
-                v-for="item in leaderboard.slice(0, isVerticalLayout ? 6 : 8)"
+                v-for="item in leaderboard.slice(0, isVerticalLayout ? 4 : 8)"
                 :key="item.playerId"
                 class="mini-lb-item"
                 :class="`mini-item-rank-${item.rank}`"
@@ -713,7 +933,7 @@
               </div>
             </div>
             <div v-else class="sidebar-empty">
-              Bình luận A / B / C / D để lên bảng xếp hạng!
+              Bình luận A / B / C / D hoặc tặng quà để lên bảng xếp hạng!
             </div>
           </div>
         </aside>
@@ -854,6 +1074,8 @@ function loadSavedTheme() {
 }
 
 const showCalibPanel = ref(false);
+const isPreviewingGiftPos = ref(false);
+const isDraggingGiftCallout = ref(false);
 const autoFitScale = ref(1);
 const layoutCalib = ref({
   preset: (route.query.preset as LayoutPreset) || 'fullscreen',
@@ -865,6 +1087,9 @@ const layoutCalib = ref({
   offsetY: Number(route.query.oy) || 0,
   paddingTop: Number(route.query.pt) || 160,
   paddingBottom: Number(route.query.pb) || 262,
+  giftPosX: Number(route.query.gx) || 50,
+  giftPosY: Number(route.query.gy) || 20,
+  giftScale: Number(route.query.gs) || 95,
 });
 
 const STORAGE_CALIB_KEY = 'kb_vertical_layout_v5';
@@ -885,6 +1110,9 @@ function loadSavedCalib() {
         offsetY: Number(route.query.oy) || Number(parsed.offsetY ?? 0),
         paddingTop: Number(route.query.pt) || Number(parsed.paddingTop ?? 160),
         paddingBottom: Number(route.query.pb) || Number(parsed.paddingBottom ?? 262),
+        giftPosX: Number(route.query.gx) || Number(parsed.giftPosX ?? 50),
+        giftPosY: Number(route.query.gy) || Number(parsed.giftPosY ?? 20),
+        giftScale: Number(route.query.gs) || Number(parsed.giftScale ?? 95),
       };
       return;
     }
@@ -912,6 +1140,9 @@ function saveAndBroadcastCalib() {
 }
 
 function applyCalibPreset(preset: 'fullscreen' | 'tiktok-safe-zone' | '362x444') {
+  const gx = layoutCalib.value.giftPosX ?? 50;
+  const gy = layoutCalib.value.giftPosY ?? 20;
+  const gs = layoutCalib.value.giftScale ?? 95;
   if (preset === 'fullscreen') {
     layoutCalib.value = {
       preset: 'fullscreen',
@@ -923,6 +1154,9 @@ function applyCalibPreset(preset: 'fullscreen' | 'tiktok-safe-zone' | '362x444')
       offsetY: 0,
       paddingTop: 12,
       paddingBottom: 16,
+      giftPosX: gx,
+      giftPosY: gy,
+      giftScale: gs,
     };
   } else if (preset === 'tiktok-safe-zone') {
     layoutCalib.value = {
@@ -935,6 +1169,9 @@ function applyCalibPreset(preset: 'fullscreen' | 'tiktok-safe-zone' | '362x444')
       offsetY: 0,
       paddingTop: 160,
       paddingBottom: 262,
+      giftPosX: gx,
+      giftPosY: gy,
+      giftScale: gs,
     };
   } else if (preset === '362x444') {
     layoutCalib.value = {
@@ -947,6 +1184,9 @@ function applyCalibPreset(preset: 'fullscreen' | 'tiktok-safe-zone' | '362x444')
       offsetY: 0,
       paddingTop: 0,
       paddingBottom: 0,
+      giftPosX: gx,
+      giftPosY: gy,
+      giftScale: gs,
     };
   }
   saveAndBroadcastCalib();
@@ -956,6 +1196,73 @@ function onManualCalibChange() {
   layoutCalib.value.preset = 'custom';
   saveAndBroadcastCalib();
 }
+
+function toggleGiftCalloutPreview() {
+  isPreviewingGiftPos.value = !isPreviewingGiftPos.value;
+}
+
+function setGiftCalloutPosition(posX: number, posY: number) {
+  layoutCalib.value.giftPosX = posX;
+  layoutCalib.value.giftPosY = posY;
+  isPreviewingGiftPos.value = true;
+  saveAndBroadcastCalib();
+}
+
+function onGiftPosSliderChange() {
+  isPreviewingGiftPos.value = true;
+  saveAndBroadcastCalib();
+}
+
+function startDragGiftCallout(e: PointerEvent) {
+  if (!showCalibPanel.value && !isPreviewingGiftPos.value) return;
+  if (!broadcastFrameRef.value) return;
+  e.preventDefault();
+  e.stopPropagation();
+
+  const frameEl = broadcastFrameRef.value;
+  isDraggingGiftCallout.value = true;
+
+  const updatePosFromPointer = (ev: PointerEvent) => {
+    const rect = frameEl.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const rawX = ((ev.clientX - rect.left) / rect.width) * 100;
+    const rawY = ((ev.clientY - rect.top) / rect.height) * 100;
+    layoutCalib.value.giftPosX = Math.round(Math.max(12, Math.min(88, rawX)));
+    layoutCalib.value.giftPosY = Math.round(Math.max(8, Math.min(92, rawY)));
+  };
+
+  updatePosFromPointer(e);
+
+  const onMove = (ev: PointerEvent) => {
+    updatePosFromPointer(ev);
+  };
+
+  const onUp = () => {
+    isDraggingGiftCallout.value = false;
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    saveAndBroadcastCalib();
+  };
+
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+}
+
+const giftOriginPositionStyle = computed(() => ({
+  top: `${layoutCalib.value.giftPosY ?? 20}%`,
+  left: `${layoutCalib.value.giftPosX ?? 50}%`,
+}));
+
+const giftCalloutPositionStyle = computed(() => {
+  const gx = layoutCalib.value.giftPosX ?? 50;
+  const gy = layoutCalib.value.giftPosY ?? 20;
+  const gs = (layoutCalib.value.giftScale ?? 95) / 100;
+  return {
+    top: `${gy}%`,
+    left: `${gx}%`,
+    transform: `translate(-50%, -50%) scale(${gs.toFixed(2)})`,
+  };
+});
 
 function recalcAutoFit() {
   if (props.embedded || !broadcastFrameRef.value || typeof window === 'undefined') {
@@ -1062,6 +1369,9 @@ function handleStorageSync(e: StorageEvent) {
         offsetY: Number(parsed.offsetY ?? 0),
         paddingTop: Number(parsed.paddingTop ?? 160),
         paddingBottom: Number(parsed.paddingBottom ?? 262),
+        giftPosX: Number(parsed.giftPosX ?? 50),
+        giftPosY: Number(parsed.giftPosY ?? 20),
+        giftScale: Number(parsed.giftScale ?? 95),
         preset: String(parsed.preset || 'fullscreen') as LayoutPreset,
       };
       requestAnimationFrame(recalcAutoFit);
@@ -1095,6 +1405,100 @@ const remainingSeconds = ref<number>(15);
 const answeredCount = ref<number>(0);
 const answeredPlayers = ref<Array<{ playerId: string; nickname: string; username: string }>>([]);
 const activeGiftBanner = ref<any>(null);
+const samplePreviewGiftBanner = {
+  id: 'preview-gift-pos',
+  user: {
+    id: 'preview-vip',
+    username: 'idol_tiktok_vip',
+    nickname: 'Minh Anh 🌸 VIP',
+  },
+  giftId: '5269',
+  giftName: 'Pháo Hoa Sân Khấu',
+  repeatCount: 5,
+  effectType: 'FIREWORKS',
+  rewardType: 'POINTS',
+  rewardPoints: 100,
+  giftPoints: 500,
+  icon: '🎆',
+  displayMessage: 'Kéo thả bảng này hoặc dùng thanh trượt để đặt vị trí ưng ý!',
+};
+
+const displayedGiftBanner = computed(() => {
+  if (activeGiftBanner.value) return activeGiftBanner.value;
+  if (isPreviewingGiftPos.value) return samplePreviewGiftBanner;
+  return null;
+});
+
+const availableGifts = ref<any[]>([]);
+const activeGifts = computed(() =>
+  availableGifts.value.filter((g) => g.isActive !== false)
+);
+
+function resolveGiftEmoji(icon?: string, giftName?: string): string {
+  const map: Record<string, string> = {
+    flower: '🌹',
+    sparkles: '🎆',
+    zap: '⚡',
+    lightbulb: '🌟',
+    crown: '👑',
+    heart: '💖',
+    icecream: '🍦',
+    lion: '🦁',
+    rocket: '🚀',
+    diamond: '💎',
+    fire: '🔥',
+    gift: '🎁',
+  };
+  if (icon && map[icon.toLowerCase()]) return map[icon.toLowerCase()];
+  if (icon && icon.trim().length <= 8 && !/^[a-zA-Z]+$/.test(icon.trim())) {
+    return icon.trim();
+  }
+  const lower = (giftName || '').toLowerCase();
+  if (lower.includes('hồng') || lower.includes('rose')) return '🌹';
+  if (lower.includes('pháo') || lower.includes('firework')) return '🎆';
+  if (lower.includes('ánh sáng')) return '⚡';
+  if (lower.includes('tim') || lower.includes('heart')) return '💖';
+  if (lower.includes('sao') || lower.includes('gợi ý')) return '🌟';
+  if (lower.includes('vương miện') || lower.includes('crown')) return '👑';
+  if (lower.includes('kem')) return '🍦';
+  if (lower.includes('sư tử') || lower.includes('lion')) return '🦁';
+  return '🎁';
+}
+
+function formatUserGiftFunction(g: any): string {
+  const rType = g?.rewardType || 'POINTS';
+  const pts = g?.rewardPoints ?? 100;
+  if (rType === 'ELIMINATE_WRONG') return '🎯 Loại 1 đáp án sai';
+  if (rType === 'POINTS_AND_ELIMINATE') return `🔥 +${pts}Đ & Loại 1 sai`;
+  if (rType === 'ADD_TIME') return `⏱️ +${pts || 10} giây suy nghĩ`;
+  if (rType === 'NONE') return '✨ Hiệu ứng vinh danh';
+  return `⚡ +${pts} điểm`;
+}
+
+function giftRewardBadgeClass(rewardType?: string): string {
+  if (rewardType === 'ELIMINATE_WRONG') return 'gift-badge-hint';
+  if (rewardType === 'POINTS_AND_ELIMINATE') return 'gift-badge-combo';
+  if (rewardType === 'ADD_TIME') return 'gift-badge-time';
+  if (rewardType === 'NONE') return 'gift-badge-none';
+  return 'gift-badge-points';
+}
+
+function formatTriggeredGiftAction(giftPayload: any): string {
+  if (!giftPayload) return '';
+  if (giftPayload.eliminatedHintOption && giftPayload.giftPoints > 0) {
+    return `🔥 +${giftPayload.giftPoints}Đ & LOẠI ${giftPayload.eliminatedHintOption}`;
+  }
+  if (giftPayload.eliminatedHintOption) {
+    return `🎯 ĐÃ LOẠI ĐÁP ÁN ${giftPayload.eliminatedHintOption}`;
+  }
+  if (giftPayload.addedSeconds > 0) {
+    return `⏱️ +${giftPayload.addedSeconds} GIÂY`;
+  }
+  if (giftPayload.giftPoints > 0) {
+    return `⚡ +${giftPayload.giftPoints} ĐIỂM`;
+  }
+  return formatUserGiftFunction(giftPayload);
+}
 const isSoundMuted = ref<boolean>(Boolean(props.embedded));
 const bgmEnabled = ref<boolean>(true);
 const bgmVolume = ref<number>(40);
@@ -1461,7 +1865,13 @@ function handleResize() {
 
 async function loadInitialRecovery() {
   try {
-    const data = await api.getRoom(roomCode.value);
+    const [data, giftList] = await Promise.all([
+      api.getRoom(roomCode.value),
+      api.getGifts().catch(() => []),
+    ]);
+    if (Array.isArray(giftList)) {
+      availableGifts.value = giftList;
+    }
     if (data.roomState) {
       roomState.value = data.roomState;
       recentFeed.value = data.roomState.recentEvents || [];
@@ -1613,6 +2023,9 @@ onMounted(async () => {
       offsetY: Number(cfg.offsetY ?? layoutCalib.value.offsetY),
       paddingTop: Number(cfg.paddingTop ?? layoutCalib.value.paddingTop ?? 160),
       paddingBottom: Number(cfg.paddingBottom ?? layoutCalib.value.paddingBottom ?? 262),
+      giftPosX: Number(cfg.giftPosX ?? layoutCalib.value.giftPosX ?? 50),
+      giftPosY: Number(cfg.giftPosY ?? layoutCalib.value.giftPosY ?? 20),
+      giftScale: Number(cfg.giftScale ?? layoutCalib.value.giftScale ?? 95),
       preset: String(cfg.preset || layoutCalib.value.preset) as LayoutPreset,
     };
     if (typeof window !== 'undefined') {
@@ -1631,11 +2044,21 @@ onMounted(async () => {
 
   socket.on('gift.animation', (giftPayload) => {
     activeGiftBanner.value = giftPayload;
-    phaserStage?.triggerFireworks(3);
+    phaserStage?.triggerStageGiftEffect(giftPayload?.effectType || 'FIREWORKS');
+    if (!isSoundMuted.value) {
+      soundFX.playCorrectAnswer();
+    }
     if (giftTimeout) clearTimeout(giftTimeout);
     giftTimeout = setTimeout(() => {
       activeGiftBanner.value = null;
     }, giftPayload.durationMs || 4500);
+  });
+
+  socket.on('gifts.updated', (updatedGifts) => {
+    if (Array.isArray(updatedGifts)) {
+      availableGifts.value = updatedGifts;
+      requestAnimationFrame(recalcAutoFit);
+    }
   });
 });
 
@@ -2109,7 +2532,9 @@ onBeforeUnmount(() => {
 }
 
 .calib-popup-card {
-  width: min(340px, 94vw);
+  width: min(350px, 94vw);
+  max-height: 82vh;
+  overflow-y: auto;
   padding: 0.9rem;
   border-radius: 0.9rem;
   background: rgba(10, 14, 34, 0.96);
@@ -3057,15 +3482,153 @@ onBeforeUnmount(() => {
   100% { transform: scale(1.02); opacity: 1; }
 }
 
-/* Sidebar / Bottom Compact Leaderboard */
+/* Sidebar / Bottom Compact Leaderboard & Gift Showcase */
+.sidebar-leaderboard {
+  display: flex;
+  flex-direction: column;
+  gap: 1vh;
+  min-width: 0;
+}
+
 .sidebar-card {
   background: rgba(13, 17, 39, 0.86);
   border: 1px solid var(--border-subtle);
   border-radius: 0.85rem;
-  padding: 0.75rem 0.85rem;
+  padding: 0.7rem 0.8rem;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.45rem;
+}
+
+.gift-showcase-card {
+  border-color: rgba(250, 204, 21, 0.35);
+  background: linear-gradient(160deg, rgba(20, 24, 54, 0.92) 0%, rgba(13, 17, 39, 0.9) 100%);
+}
+
+.gift-showcase-header {
+  justify-content: space-between;
+}
+
+.gift-header-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.gift-header-hint {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(250, 204, 21, 0.14);
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  color: var(--accent-gold);
+}
+
+.user-gifts-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.38rem;
+}
+
+.layout-vertical .user-gifts-grid {
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.35rem;
+}
+
+.user-gift-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.55rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  min-width: 0;
+}
+
+.user-gift-emoji {
+  width: 28px;
+  height: 28px;
+  border-radius: 0.45rem;
+  background: rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+  flex-shrink: 0;
+}
+
+.user-gift-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.user-gift-name {
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.15;
+}
+
+.user-gift-badge {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  font-size: 0.66rem;
+  font-weight: 800;
+  padding: 0.08rem 0.4rem;
+  border-radius: 0.35rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.gift-badge-points {
+  background: rgba(0, 240, 255, 0.16);
+  border: 1px solid rgba(0, 240, 255, 0.42);
+  color: var(--accent-cyan);
+}
+
+.gift-badge-hint {
+  background: rgba(250, 204, 21, 0.18);
+  border: 1px solid rgba(250, 204, 21, 0.48);
+  color: #fde047;
+}
+
+.gift-badge-combo {
+  background: rgba(244, 63, 94, 0.2);
+  border: 1px solid rgba(244, 63, 94, 0.5);
+  color: #fda4af;
+}
+
+.gift-badge-time {
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.48);
+  color: #6ee7b7;
+}
+
+.gift-badge-none {
+  background: rgba(192, 132, 252, 0.18);
+  border: 1px solid rgba(192, 132, 252, 0.42);
+  color: #e9d5ff;
+}
+
+.gift-ticker-emoji {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.gift-action-triggered-pill {
+  background: rgba(250, 204, 21, 0.24) !important;
+  border-color: var(--accent-gold) !important;
+  color: #fef08a !important;
+  font-weight: 900 !important;
 }
 
 .sidebar-header {
@@ -3154,51 +3717,427 @@ onBeforeUnmount(() => {
   color: var(--text-muted);
 }
 
-/* Gift Inline Header Ticker (không che câu hỏi, không làm nhảy khung) */
-.stage-header.header-gift-active {
-  background: linear-gradient(90deg, rgba(45, 27, 10, 0.95) 0%, rgba(21, 16, 48, 0.95) 100%);
-  border-color: var(--accent-gold);
-  box-shadow: 0 0 14px rgba(250, 204, 21, 0.35);
+/* ===================================================================
+   HIỆU ỨNG SÂN KHẤU TIỀN CẢNH RỰC RỠ & BANNER NGƯỜI TẶNG QUÀ GIỮA TẦM MẮT
+   =================================================================== */
+.broadcast-frame {
+  position: relative;
 }
 
-.gift-inline-ticker {
+.broadcast-frame.frame-gift-celebrating .center-stage-area {
+  box-shadow:
+    0 0 32px rgba(250, 204, 21, 0.55),
+    0 0 64px rgba(255, 71, 133, 0.35),
+    inset 0 0 24px rgba(250, 204, 21, 0.22) !important;
+  border-color: #facc15 !important;
+  transition: all 0.25s ease;
+}
+
+.gift-stage-celebration-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 65;
+  overflow: hidden;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  justify-content: center;
+}
+
+/* 4 Luồng Đèn Laser Sân Khấu Tiền Cảnh */
+.fx-laser-beam {
+  position: absolute;
+  width: 42%;
+  height: 140%;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  opacity: 0.72;
+  filter: blur(8px);
+}
+
+.fx-beam-1 {
+  top: -20%;
+  left: -8%;
+  background: linear-gradient(165deg, rgba(0, 240, 255, 0.65) 0%, rgba(0, 240, 255, 0) 72%);
+  transform-origin: top left;
+  animation: laser-sweep-left 1.6s ease-in-out infinite alternate;
+}
+
+.fx-beam-2 {
+  top: -20%;
+  right: -8%;
+  background: linear-gradient(-165deg, rgba(250, 204, 21, 0.68) 0%, rgba(250, 204, 21, 0) 72%);
+  transform-origin: top right;
+  animation: laser-sweep-right 1.6s ease-in-out infinite alternate;
+}
+
+.fx-beam-3 {
+  bottom: -20%;
+  left: -6%;
+  background: linear-gradient(25deg, rgba(255, 71, 133, 0.6) 0%, rgba(255, 71, 133, 0) 68%);
+  transform-origin: bottom left;
+  animation: laser-sweep-right 1.3s ease-in-out infinite alternate;
+}
+
+.fx-beam-4 {
+  bottom: -20%;
+  right: -6%;
+  background: linear-gradient(-25deg, rgba(192, 132, 252, 0.65) 0%, rgba(192, 132, 252, 0) 68%);
+  transform-origin: bottom right;
+  animation: laser-sweep-left 1.3s ease-in-out infinite alternate;
+}
+
+@keyframes laser-sweep-left {
+  0% {
+    transform: rotate(-18deg) scaleX(0.85);
+  }
+  100% {
+    transform: rotate(22deg) scaleX(1.2);
+  }
+}
+
+@keyframes laser-sweep-right {
+  0% {
+    transform: rotate(18deg) scaleX(0.85);
+  }
+  100% {
+    transform: rotate(-22deg) scaleX(1.2);
+  }
+}
+
+/* Vòng Sóng Năng Lượng Lan Tỏa Giữa Sân Khấu */
+.fx-shockwave-ring {
+  position: absolute;
+  top: 44%;
+  left: 50%;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 4px solid rgba(250, 204, 21, 0.9);
+  box-shadow:
+    0 0 28px rgba(250, 204, 21, 0.8),
+    inset 0 0 18px rgba(0, 240, 255, 0.7);
+  transform: translate(-50%, -50%) scale(0.3);
+  animation: stage-shockwave 1.5s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.fx-shockwave-ring.fx-ring-delay {
+  border-color: rgba(0, 240, 255, 0.85);
+  animation-delay: 0.55s;
+}
+
+@keyframes stage-shockwave {
+  0% {
+    transform: translate(-50%, -50%) scale(0.3);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(6.5);
+    opacity: 0;
+  }
+}
+
+/* Mưa Pháo Hoa & Emoji Quà Tặng Bay Tiền Cảnh */
+.fx-particles-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.fx-burst-item {
+  position: absolute;
+  top: 44%;
+  left: 50%;
+  font-size: clamp(18px, 3.2vh, 30px);
+  filter: drop-shadow(0 0 10px rgba(250, 204, 21, 0.85));
+  animation: fx-particle-explode 1.8s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.fx-p-1  { --tx: -160px; --ty: -150px; animation-delay: 0s; }
+.fx-p-2  { --tx: 165px;  --ty: -145px; animation-delay: 0.08s; }
+.fx-p-3  { --tx: -195px; --ty: -35px;  animation-delay: 0.14s; }
+.fx-p-4  { --tx: 195px;  --ty: -30px;  animation-delay: 0.2s; }
+.fx-p-5  { --tx: -155px; --ty: 130px;  animation-delay: 0.1s; }
+.fx-p-6  { --tx: 155px;  --ty: 135px;  animation-delay: 0.18s; }
+.fx-p-7  { --tx: 0px;    --ty: -185px; animation-delay: 0.05s; }
+.fx-p-8  { --tx: 0px;    --ty: 175px;  animation-delay: 0.22s; }
+.fx-p-9  { --tx: -100px; --ty: -170px; animation-delay: 0.28s; }
+.fx-p-10 { --tx: 105px;  --ty: -170px; animation-delay: 0.32s; }
+.fx-p-11 { --tx: -110px; --ty: 160px;  animation-delay: 0.36s; }
+.fx-p-12 { --tx: 115px;  --ty: 160px;  animation-delay: 0.4s; }
+.fx-p-13 { --tx: -210px; --ty: -100px; animation-delay: 0.25s; }
+.fx-p-14 { --tx: 210px;  --ty: -95px;  animation-delay: 0.3s; }
+.fx-p-15 { --tx: -205px; --ty: 85px;   animation-delay: 0.35s; }
+.fx-p-16 { --tx: 205px;  --ty: 85px;   animation-delay: 0.42s; }
+.fx-p-17 { --tx: -65px;  --ty: -130px; animation-delay: 0.15s; }
+.fx-p-18 { --tx: 65px;   --ty: -130px; animation-delay: 0.2s; }
+
+@keyframes fx-particle-explode {
+  0% {
+    transform: translate(-50%, -50%) scale(0.2) rotate(0deg);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(-50% + var(--tx, 100px)), calc(-50% + var(--ty, -100px))) scale(1.25) rotate(25deg);
+    opacity: 0;
+  }
+}
+
+/* Cài đặt vị trí thông báo quà trong popup Căn Khung */
+.calib-gift-pos-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.calib-preview-gift-btn {
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(250, 204, 21, 0.16);
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  color: #fde047;
+  font-size: 0.68rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.calib-preview-gift-btn:hover,
+.calib-preview-gift-btn.active {
+  background: #facc15;
+  color: #0b1026;
+}
+
+.calib-gift-presets-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.3rem;
+}
+
+/* THẺ VINH DANH NGƯỜI TẶNG QUÀ (TÙY CHỈNH VỊ TRÍ & KÉO THẢ TRỰC TIẾP) */
+.gift-center-stage-callout {
+  position: absolute;
+  top: 20%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.95);
+  width: min(92%, 440px);
+  padding: 0.85rem 1.05rem 0.8rem;
+  border-radius: 1.35rem;
+  background: linear-gradient(145deg, rgba(20, 12, 48, 0.96) 0%, rgba(42, 14, 58, 0.96) 52%, rgba(16, 22, 54, 0.96) 100%);
+  border: 2.5px solid #facc15;
+  box-shadow:
+    0 0 0 4px rgba(250, 204, 21, 0.24),
+    0 18px 50px rgba(0, 0, 0, 0.85),
+    0 0 42px rgba(250, 204, 21, 0.65),
+    0 0 75px rgba(255, 71, 133, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.48rem;
+  text-align: center;
+  backdrop-filter: blur(14px);
+  animation: gift-callout-float 1.2s ease-in-out infinite alternate;
+  user-select: none;
+}
+
+.gift-center-stage-callout.callout-draggable {
+  pointer-events: auto;
+  cursor: grab;
+  border-style: dashed;
+  border-color: #00f0ff;
+}
+
+.gift-center-stage-callout.callout-is-dragging {
+  cursor: grabbing;
+  animation: none;
+  box-shadow:
+    0 0 0 5px rgba(0, 240, 255, 0.45),
+    0 24px 60px rgba(0, 0, 0, 0.9);
+}
+
+.callout-glow-backdrop {
+  position: absolute;
+  inset: -18px;
+  border-radius: 1.8rem;
+  background: radial-gradient(circle, rgba(250, 204, 21, 0.38) 0%, rgba(255, 71, 133, 0.22) 48%, transparent 72%);
+  z-index: -1;
+  filter: blur(12px);
+}
+
+.callout-top-ribbon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.18rem 0.85rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f59e0b, #facc15, #f59e0b);
+  color: #1e0b36;
+  font-size: clamp(10px, 1.5vh, 12px);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  box-shadow: 0 3px 12px rgba(250, 204, 21, 0.5);
+}
+
+.callout-main-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.callout-sender-avatar-wrap {
+  position: relative;
+  width: clamp(46px, 7vh, 58px);
+  height: clamp(46px, 7vh, 58px);
+  flex-shrink: 0;
+}
+
+.callout-sender-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #facc15;
+  box-shadow: 0 0 16px rgba(250, 204, 21, 0.8);
+}
+
+.callout-avatar-crown {
+  position: absolute;
+  top: -11px;
+  left: 50%;
+  transform: translateX(-50%) rotate(-8deg);
+  font-size: 1.15rem;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
+}
+
+.callout-sender-details {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   min-width: 0;
   flex: 1;
+  text-align: left;
 }
 
-.gift-inline-text {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: clamp(10px, 1.7vh, 14px);
+.callout-sender-name {
+  font-size: clamp(15px, 2.5vh, 21px);
+  font-weight: 900;
+  color: #fef08a;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.65);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  min-width: 0;
+  max-width: 100%;
+  line-height: 1.2;
 }
 
-.layout-vertical .gift-inline-text {
-  font-size: 11px;
-}
-
-.gift-inline-text strong {
-  color: var(--accent-gold);
-  font-weight: 800;
-}
-
-.gift-inline-text span {
+.callout-gift-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  font-size: clamp(12px, 1.9vh, 15px);
   color: #ffffff;
   font-weight: 700;
 }
 
-.gift-inline-text em {
-  font-style: normal;
+.callout-gift-title {
+  color: #38bdf8;
+  font-weight: 900;
+}
+
+.callout-combo-count {
+  display: inline-flex;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ff4785, #f43f5e);
+  color: #ffffff;
+  font-weight: 900;
+  font-size: clamp(12px, 1.9vh, 16px);
+  box-shadow: 0 2px 8px rgba(244, 63, 94, 0.55);
+}
+
+.callout-big-emoji {
+  font-size: clamp(34px, 5.8vh, 52px);
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 14px rgba(250, 204, 21, 0.8));
+  animation: gift-emoji-bounce 0.65s ease-in-out infinite alternate;
+}
+
+@keyframes gift-emoji-bounce {
+  0% {
+    transform: scale(0.92) rotate(-8deg);
+  }
+  100% {
+    transform: scale(1.18) rotate(10deg);
+  }
+}
+
+.callout-action-banner {
+  width: 100%;
+  padding: 0.42rem 0.85rem;
+  border-radius: 0.8rem;
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.28) 0%, rgba(0, 240, 255, 0.34) 50%, rgba(250, 204, 21, 0.28) 100%);
+  border: 1.5px solid #34d399;
+  color: #ecfdf5;
+  font-size: clamp(13px, 2.1vh, 18px);
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 18px rgba(52, 211, 153, 0.45);
+}
+
+.callout-sub-message {
+  font-size: clamp(11px, 1.6vh, 13.5px);
   color: #fde68a;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-weight: 600;
+  margin: 0;
+  line-height: 1.25;
+}
+
+@keyframes gift-callout-float {
+  0% {
+    margin-top: 0px;
+  }
+  100% {
+    margin-top: -6px;
+  }
+}
+
+.gift-stage-pop-enter-active {
+  animation: gift-pop-in 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.gift-stage-pop-leave-active {
+  animation: gift-pop-out 0.3s ease-in forwards;
+}
+
+@keyframes gift-pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes gift-pop-out {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
 }
 
 .icon-cyan {
@@ -3558,6 +4497,61 @@ onBeforeUnmount(() => {
 .theme-cute .sidebar-header h3 {
   color: #9d174d;
   font-size: 0.9rem;
+}
+
+.theme-cute .gift-showcase-card {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: #f472b6;
+}
+
+.theme-cute .gift-header-hint {
+  background: #fdf2f8;
+  border-color: #f9a8d4;
+  color: #be185d;
+}
+
+.theme-cute .user-gift-item {
+  background: #fff5f9;
+  border: 2px solid #fbcfe8;
+  border-radius: 14px;
+}
+
+.theme-cute .user-gift-emoji {
+  background: #fce7f3;
+}
+
+.theme-cute .user-gift-name {
+  color: #831843;
+}
+
+.theme-cute .gift-badge-points {
+  background: #ffe4e6;
+  border-color: #fb7185;
+  color: #be123c;
+}
+
+.theme-cute .gift-badge-hint {
+  background: #fef3c7;
+  border-color: #fbbf24;
+  color: #b45309;
+}
+
+.theme-cute .gift-badge-combo {
+  background: #f3e8ff;
+  border-color: #c084fc;
+  color: #7e22ce;
+}
+
+.theme-cute .gift-badge-time {
+  background: #d1fae5;
+  border-color: #34d399;
+  color: #047857;
+}
+
+.theme-cute .gift-badge-none {
+  background: #e0f2fe;
+  border-color: #38bdf8;
+  color: #0369a1;
 }
 
 .theme-cute .mini-lb-item,

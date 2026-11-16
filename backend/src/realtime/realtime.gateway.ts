@@ -36,6 +36,9 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       bgmVolume?: number;
       sfxVolume?: number;
       lofiStyle?: string;
+      giftPosX?: number;
+      giftPosY?: number;
+      giftScale?: number;
     }
   >();
 
@@ -133,6 +136,9 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       bgmVolume?: number;
       sfxVolume?: number;
       lofiStyle?: string;
+      giftPosX?: number;
+      giftPosY?: number;
+      giftScale?: number;
     }
   ) {
     const roomCode = (payload?.roomCode || 'KB2026').toUpperCase();
@@ -151,6 +157,9 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       bgmVolume: 40,
       sfxVolume: 80,
       lofiStyle: 'chill-cafe',
+      giftPosX: 50,
+      giftPosY: 20,
+      giftScale: 95,
     };
     const updated = {
       frameWidth: Number(payload.frameWidth ?? current.frameWidth),
@@ -167,6 +176,9 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       bgmVolume: payload.bgmVolume !== undefined ? Number(payload.bgmVolume) : (current.bgmVolume ?? 40),
       sfxVolume: payload.sfxVolume !== undefined ? Number(payload.sfxVolume) : (current.sfxVolume ?? 80),
       lofiStyle: payload.lofiStyle || current.lofiStyle || 'chill-cafe',
+      giftPosX: payload.giftPosX !== undefined ? Number(payload.giftPosX) : (current.giftPosX ?? 50),
+      giftPosY: payload.giftPosY !== undefined ? Number(payload.giftPosY) : (current.giftPosY ?? 20),
+      giftScale: payload.giftScale !== undefined ? Number(payload.giftScale) : (current.giftScale ?? 95),
     };
     this.roomLayoutConfigs.set(roomCode, updated);
     this.emitToRoom(roomCode, 'layout.config', updated);
@@ -176,6 +188,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   public emitToRoom(roomCode: string, event: string, data: any) {
     if (!this.server) return;
     this.server.to(roomCode).emit(event, data);
+  }
+
+  public emitGlobal(event: string, data: any) {
+    if (!this.server) return;
+    this.server.emit(event, data);
   }
 }
 
