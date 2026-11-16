@@ -31,6 +31,7 @@ export class DatabaseService implements OnModuleInit {
   private readonly logger = new Logger(DatabaseService.name);
   private db!: SqliteDatabase;
   private readonly dbPath: string;
+  private readonly roomConfigCache = new Map<string, any>();
 
   constructor() {
     const backendRoot = path.resolve(__dirname, '../..');
@@ -52,15 +53,35 @@ export class DatabaseService implements OnModuleInit {
     if (this.db) return;
     this.db = new DatabaseSync(this.dbPath);
     this.db.exec('PRAGMA journal_mode = WAL;');
+    this.db.exec('PRAGMA synchronous = NORMAL;');
+    this.db.exec('PRAGMA temp_store = MEMORY;');
+    this.db.exec('PRAGMA cache_size = -32000;');
+    this.db.exec('PRAGMA busy_timeout = 5000;');
     this.db.exec('PRAGMA foreign_keys = ON;');
 
-    const schemaPath = path.join(__dirname, 'mysql-init.sql');
+    const primarySchemaPath = path.join(__dirname, 'mysql-init.sql');
+    const fallbackSchemaPath = path.join(__dirname, '../../src/database/mysql-init.sql');
+    const schemaPath = fs.existsSync(primarySchemaPath) ? primarySchemaPath : fallbackSchemaPath;
     const schemaSql = fs.readFileSync(schemaPath, 'utf-8');
     this.db.exec(schemaSql);
     this.ensureGiftRewardColumns();
+    this.ensurePerformanceIndexes();
 
     this.seedIfEmpty();
     this.logger.log(`SQLite Database initialized at ${this.dbPath}`);
+  }
+
+  private ensurePerformanceIndexes() {
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_game_players_session_user
+        ON game_players(session_id, tiktok_user_id);
+      CREATE INDEX IF NOT EXISTS idx_game_players_session_score
+        ON game_players(session_id, total_score DESC, correct_count DESC, joined_at ASC);
+      CREATE INDEX IF NOT EXISTS idx_game_results_session_question
+        ON game_results(session_id, question_id);
+      CREATE INDEX IF NOT EXISTS idx_game_results_lookup
+        ON game_results(session_id, question_id, player_id);
+    `);
   }
 
   private ensureGiftRewardColumns() {
@@ -1218,6 +1239,11 @@ export class DatabaseService implements OnModuleInit {
   // =====================================================================
 
   public getRoomWithConfig(roomIdOrCode: string) {
+    const cached = this.roomConfigCache.get(roomIdOrCode);
+    if (cached) {
+      return cached;
+    }
+
     const room = this.db
       .prepare(`SELECT * FROM rooms WHERE id = ? OR room_code = ? LIMIT 1`)
       .get(roomIdOrCode, roomIdOrCode) as any;
@@ -1227,7 +1253,7 @@ export class DatabaseService implements OnModuleInit {
       .prepare(`SELECT * FROM room_configs WHERE room_id = ?`)
       .get(room.id) as any;
 
-    return {
+    const result = {
       id: room.id,
       roomCode: room.room_code,
       title: room.title,
@@ -1243,6 +1269,10 @@ export class DatabaseService implements OnModuleInit {
         revealDuration: config?.reveal_duration ?? 6,
       },
     };
+
+    this.roomConfigCache.set(room.id, result);
+    this.roomConfigCache.set(room.room_code, result);
+    return result;
   }
 
   public updateRoomConfig(
@@ -1291,6 +1321,7 @@ export class DatabaseService implements OnModuleInit {
         );
     });
 
+    this.roomConfigCache.clear();
     return this.getRoomWithConfig(room.id);
   }
 
@@ -1298,6 +1329,7 @@ export class DatabaseService implements OnModuleInit {
     this.db
       .prepare(`UPDATE rooms SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
       .run(status, roomId);
+    this.roomConfigCache.clear();
   }
 
   public createGameSession(roomId: string, snapshots: SessionQuestionSnapshot[]) {
@@ -1628,10 +1660,10 @@ export class DatabaseService implements OnModuleInit {
 
       for (const row of results) {
         const opt = row.selected_option as OptionLabel;
-        const isCorrect = opt === params.correctOption && row.time_remaining_ms > 0;
+        const isCorrect = opt === params.correctOption;
         const basePoints = isCorrect ? 100 : 0;
         const ratio = Math.min(1, Math.max(0, row.time_remaining_ms / timeLimitMs));
-        const speedBonus = isCorrect ? Math.floor(50 * ratio) : 0;
+        const speedBonus = isCorrect ? Math.max(5, Math.floor(50 * ratio)) : 0;
         const totalPoints = basePoints + speedBonus;
 
         updateResultStmt.run(isCorrect ? 1 : 0, basePoints, speedBonus, totalPoints, row.id);
@@ -1655,9 +1687,12 @@ export class DatabaseService implements OnModuleInit {
   public getSessionLeaderboard(sessionId: string, lastQuestionId?: string): LeaderboardEntry[] {
     const rows = this.db
       .prepare(
-        `SELECT p.*,
-          (SELECT r.total_points FROM game_results r WHERE r.session_id = p.session_id AND r.player_id = p.id AND r.question_id = ?) as last_delta
+        `SELECT p.*, r.total_points as last_delta
          FROM game_players p
+         LEFT JOIN game_results r
+           ON r.session_id = p.session_id
+          AND r.player_id = p.id
+          AND r.question_id = ?
          WHERE p.session_id = ?
          ORDER BY p.total_score DESC, p.correct_count DESC, p.joined_at ASC`
       )
@@ -1709,17 +1744,10 @@ export class DatabaseService implements OnModuleInit {
     payload: any;
     receivedAt: number;
   }): boolean {
-    const existing = this.db
-      .prepare(`SELECT id FROM live_events WHERE id = ?`)
-      .get(event.id);
-    if (existing) {
-      return false;
-    }
-
     try {
-      this.db
+      const res = this.db
         .prepare(
-          `INSERT INTO live_events (id, room_id, event_type, tiktok_user_id, username, nickname, payload_json, received_at, processed)
+          `INSERT OR IGNORE INTO live_events (id, room_id, event_type, tiktok_user_id, username, nickname, payload_json, received_at, processed)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`
         )
         .run(
@@ -1731,8 +1759,8 @@ export class DatabaseService implements OnModuleInit {
           event.nickname,
           JSON.stringify(event.payload || {}),
           event.receivedAt
-        );
-      return true;
+        ) as { changes?: number };
+      return Boolean(res && res.changes && res.changes > 0);
     } catch {
       return false;
     }

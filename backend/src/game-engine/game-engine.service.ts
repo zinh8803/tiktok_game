@@ -29,6 +29,7 @@ export interface ActiveRoomRuntime {
   isQuestionOpen: boolean;
   questionStartedAt: number;
   questionEndsAt: number;
+  questionHardCloseAt: number;
   remainingSeconds: number;
   answeredCountCurrentQuestion: number;
   answeredPlayersCurrentQuestion: Array<{
@@ -38,11 +39,27 @@ export interface ActiveRoomRuntime {
   }>;
   eliminatedHintOption: OptionLabel | null;
   playersMap: Map<string, { id: string; username: string; nickname: string; avatarUrl?: string }>;
+  sessionPlayersCache: Map<
+    string,
+    { id: string; tiktokUserId: string; username: string; nickname: string }
+  >;
   leaderboard: LeaderboardEntry[];
   lastQuestionResult: any | null;
   gameFinishedPayload: any | null;
   timerInterval?: NodeJS.Timeout;
   phaseTimeout?: NodeJS.Timeout;
+  coalescedBroadcastTimer?: NodeJS.Timeout;
+  pendingBroadcastFlags?: {
+    roomState?: boolean;
+    playerAnswered?: {
+      playerId: string;
+      nickname: string;
+      username: string;
+    };
+    questionResult?: boolean;
+    leaderboardUpdated?: boolean;
+  };
+  lastActivityFeedEmitAt?: number;
   autoCrowdEnabled: boolean;
   autoCrowdMin: number;
   autoCrowdMax: number;
@@ -57,6 +74,16 @@ export interface ActiveRoomRuntime {
     timestamp: number;
   }>;
 }
+
+/**
+ * Độ trễ bù trừ cho luồng phát TikTok LIVE:
+ * - SERVER_CLOSE_GRACE_MS (1800ms): Giữ cổng nhận đáp án mở thêm 1.8s sau khi đồng hồ đếm về 0s
+ *   trước khi chốt bảng điểm lần đầu.
+ * - LATE_STREAM_GRACE_MS (8500ms): Cho phép người xem bị trễ sóng TikTok LIVE (2-7 giây)
+ *   vẫn được tính đáp án đầu tiên của họ khi server đang ở pha ANSWER_REVEAL / LEADERBOARD.
+ */
+const SERVER_CLOSE_GRACE_MS = 1800;
+const LATE_STREAM_GRACE_MS = 8500;
 
 @Injectable()
 export class GameEngineService {
@@ -101,11 +128,13 @@ export class GameEngineService {
       isQuestionOpen: false,
       questionStartedAt: 0,
       questionEndsAt: 0,
+      questionHardCloseAt: 0,
       remainingSeconds: 0,
       answeredCountCurrentQuestion: 0,
       answeredPlayersCurrentQuestion: [],
       eliminatedHintOption: null,
       playersMap: new Map(),
+      sessionPlayersCache: new Map(),
       leaderboard: [],
       lastQuestionResult: null,
       gameFinishedPayload: null,
@@ -118,6 +147,71 @@ export class GameEngineService {
 
     this.runtimes.set(roomRecord.roomCode, runtime);
     return runtime;
+  }
+
+  private getOrUpsertSessionPlayer(
+    runtime: ActiveRoomRuntime,
+    user: { id: string; username: string; nickname: string; avatarUrl?: string }
+  ) {
+    if (!runtime.sessionId) {
+      throw new Error('No active sessionId');
+    }
+    const cached = runtime.sessionPlayersCache.get(user.id);
+    if (cached && cached.nickname === user.nickname && cached.username === user.username) {
+      return cached;
+    }
+    const record = this.db.upsertPlayer(runtime.sessionId, user);
+    runtime.sessionPlayersCache.set(user.id, record);
+    return record;
+  }
+
+  private flushCoalescedBroadcast(runtime: ActiveRoomRuntime) {
+    if (runtime.coalescedBroadcastTimer) {
+      clearTimeout(runtime.coalescedBroadcastTimer);
+      runtime.coalescedBroadcastTimer = undefined;
+    }
+    const flags = runtime.pendingBroadcastFlags;
+    if (!flags) return;
+    runtime.pendingBroadcastFlags = undefined;
+
+    if (flags.playerAnswered) {
+      this.realtime.emitToRoom(runtime.roomCode, 'player.answered', {
+        ...flags.playerAnswered,
+        answeredCount: runtime.answeredCountCurrentQuestion,
+        answeredPlayers: runtime.answeredPlayersCurrentQuestion.slice(-30),
+        playerCount: runtime.playersMap.size,
+      });
+    }
+    if (flags.questionResult && runtime.lastQuestionResult) {
+      this.realtime.emitToRoom(runtime.roomCode, 'question.result', runtime.lastQuestionResult);
+    }
+    if (flags.leaderboardUpdated) {
+      this.realtime.emitToRoom(runtime.roomCode, 'leaderboard.updated', {
+        leaderboard: runtime.leaderboard,
+        questionIndex: runtime.currentQuestionIndex + 1,
+        totalQuestions: runtime.questions.length,
+      });
+    }
+    if (flags.roomState) {
+      this.emitRoomState(runtime.roomCode);
+    }
+  }
+
+  private scheduleCoalescedBroadcast(
+    runtime: ActiveRoomRuntime,
+    flags: NonNullable<ActiveRoomRuntime['pendingBroadcastFlags']>,
+    delayMs = 60
+  ) {
+    runtime.pendingBroadcastFlags = {
+      ...runtime.pendingBroadcastFlags,
+      ...flags,
+    };
+    if (runtime.coalescedBroadcastTimer) {
+      return;
+    }
+    runtime.coalescedBroadcastTimer = setTimeout(() => {
+      this.flushCoalescedBroadcast(runtime);
+    }, delayMs);
   }
 
   private clearAutoCrowdAnswerTimers(runtime: ActiveRoomRuntime) {
@@ -138,6 +232,7 @@ export class GameEngineService {
       clearTimeout(runtime.phaseTimeout);
       runtime.phaseTimeout = undefined;
     }
+    this.flushCoalescedBroadcast(runtime);
     this.clearAutoCrowdAnswerTimers(runtime);
   }
 
@@ -145,14 +240,19 @@ export class GameEngineService {
     runtime: ActiveRoomRuntime,
     entry: { id: string; type: string; nickname: string; username: string; summary: string }
   ) {
+    const now = Date.now();
     runtime.recentEvents.unshift({
       ...entry,
-      timestamp: Date.now(),
+      timestamp: now,
     });
     if (runtime.recentEvents.length > 40) {
       runtime.recentEvents.length = 40;
     }
-    this.realtime.emitToRoom(runtime.roomCode, 'activity.feed', runtime.recentEvents[0]);
+    // Throttle phát lẻ activity.feed khi có hàng chục user comment cùng lúc để chống nghẽn Socket.IO
+    if (!runtime.lastActivityFeedEmitAt || now - runtime.lastActivityFeedEmitAt >= 100) {
+      runtime.lastActivityFeedEmitAt = now;
+      this.realtime.emitToRoom(runtime.roomCode, 'activity.feed', runtime.recentEvents[0]);
+    }
   }
 
   public getRoomStatePayload(roomCode = 'KB2026') {
@@ -288,10 +388,11 @@ export class GameEngineService {
     runtime.lastQuestionResult = null;
     runtime.gameFinishedPayload = null;
     runtime.leaderboard = [];
+    runtime.sessionPlayersCache.clear();
 
     // Đăng ký tất cả người chơi đang có trong phòng chờ vào session mới
     for (const plr of runtime.playersMap.values()) {
-      this.db.upsertPlayer(sessionId, plr);
+      this.getOrUpsertSessionPlayer(runtime, plr);
     }
     runtime.leaderboard = this.db.getSessionLeaderboard(sessionId);
 
@@ -336,6 +437,7 @@ export class GameEngineService {
     runtime.isQuestionOpen = true;
     runtime.questionStartedAt = now;
     runtime.questionEndsAt = now + durationSec * 1000;
+    runtime.questionHardCloseAt = runtime.questionEndsAt + SERVER_CLOSE_GRACE_MS;
     runtime.remainingSeconds = durationSec;
     runtime.answeredCountCurrentQuestion = 0;
     runtime.answeredPlayersCurrentQuestion = [];
@@ -380,25 +482,29 @@ export class GameEngineService {
       this.scheduleAutoCrowdAnswersForQuestion(runtime);
     }
 
-    // Bộ đếm thời gian ở backend phát question.timer mỗi giây
+    // Bộ đếm thời gian ở backend chỉ phát question.timer khi số giây thay đổi (1 lần/giây thay vì 4 lần/giây)
+    // Và giữ thêm SERVER_CLOSE_GRACE_MS sau khi về 0s để bù trễ mạng cho các bình luận giây cuối
     runtime.timerInterval = setInterval(() => {
-      const remainingMs = Math.max(0, runtime.questionEndsAt - Date.now());
+      const nowTick = Date.now();
+      const remainingMs = Math.max(0, runtime.questionEndsAt - nowTick);
       const remainingSec = Math.ceil(remainingMs / 1000);
-      runtime.remainingSeconds = remainingSec;
 
-      this.realtime.emitToRoom(runtime.roomCode, 'question.timer', {
-        questionId: q.questionId,
-        questionIndex: index + 1,
-        remainingSeconds: remainingSec,
-        remainingMs,
-        duration: durationSec,
-        endsAt: runtime.questionEndsAt,
-      });
+      if (remainingSec !== runtime.remainingSeconds) {
+        runtime.remainingSeconds = remainingSec;
+        this.realtime.emitToRoom(runtime.roomCode, 'question.timer', {
+          questionId: q.questionId,
+          questionIndex: index + 1,
+          remainingSeconds: remainingSec,
+          remainingMs,
+          duration: durationSec,
+          endsAt: runtime.questionEndsAt,
+        });
+      }
 
-      if (remainingMs <= 0) {
+      if (nowTick >= runtime.questionHardCloseAt) {
         this.closeAndGradeCurrentQuestion(runtime.roomCode);
       }
-    }, 250);
+    }, 200);
 
     return questionStartedPayload;
   }
@@ -604,6 +710,7 @@ export class GameEngineService {
     runtime.gameFinishedPayload = null;
     runtime.leaderboard = [];
     runtime.playersMap.clear();
+    runtime.sessionPlayersCache.clear();
     if (runtime.autoCrowdEnabled) {
       this.seedAutoCrowdPopulation(runtime);
     }
@@ -628,6 +735,19 @@ export class GameEngineService {
   } {
     const runtime = this.getOrCreateRuntime(event.roomId);
 
+    // Nếu chỉ là sự kiện vào xem live thụ động (JOIN) khi đang PLAYING thì không ghi DB để tránh nghẽn
+    if (event.type === 'JOIN' && runtime.status === 'PLAYING' && !normalizedAnswer && !isStartCommand) {
+      if (!runtime.playersMap.has(event.user.id)) {
+        runtime.playersMap.set(event.user.id, {
+          id: event.user.id,
+          username: event.user.username,
+          nickname: event.user.nickname,
+          avatarUrl: event.user.avatarUrl,
+        });
+      }
+      return { handled: true, action: 'PLAYER_JOINED_SILENT' };
+    }
+
     // Ghi nhận người chơi vào danh sách phòng
     const isNewPlayerInRoom = !runtime.playersMap.has(event.user.id);
     runtime.playersMap.set(event.user.id, {
@@ -636,10 +756,6 @@ export class GameEngineService {
       nickname: event.user.nickname,
       avatarUrl: event.user.avatarUrl,
     });
-
-    if (runtime.sessionId) {
-      this.db.upsertPlayer(runtime.sessionId, event.user);
-    }
 
     // Nếu phòng đang ở sảnh chờ (WAITING) hoặc vừa kết thúc (FINISHED) và có người bình luận "SS" / "sẵn sàng" / "start"
     if ((runtime.status === 'WAITING' || runtime.status === 'FINISHED') && isStartCommand) {
@@ -668,7 +784,7 @@ export class GameEngineService {
           username: event.user.username,
           summary: 'đã tham gia phòng chờ!',
         });
-        this.emitRoomState(runtime.roomCode);
+        this.scheduleCoalescedBroadcast(runtime, { roomState: true });
       }
       if (!normalizedAnswer) {
         return { handled: true, action: 'PLAYER_JOINED' };
@@ -709,9 +825,93 @@ export class GameEngineService {
       };
     }
 
-    // Khi câu hỏi đã hết thời gian hoặc đã đóng trên server:
-    // TUYỆT ĐỐI KHÔNG ghi nhận thêm kết quả để đảm bảo công bằng (tránh nhìn đáp án công bố trên màn hình rồi gõ theo)
-    if (!runtime.isQuestionOpen || serverNow > runtime.questionEndsAt) {
+    const currentQuestion = runtime.questions[runtime.currentQuestionIndex];
+    const playerRecord = this.getOrUpsertSessionPlayer(runtime, event.user);
+
+    // Xử lý bù độ trễ phát sóng TikTok LIVE (TikTok Studio nhanh hơn điện thoại người xem 2-6 giây):
+    // Nếu câu hỏi trên server vừa chuyển sang ANSWER_REVEAL hoặc LEADERBOARD nhưng vẫn trong cửa sổ
+    // bù trễ LATE_STREAM_GRACE_MS (8.5s) và người chơi này CHƯA trả lời câu hiện tại lần nào,
+    // hệ thống vẫn ghi nhận và chấm điểm ngay lập tức (nhưng tuyệt đối không cho phép đổi đáp án nếu đã trả lời trước đó).
+    if (!runtime.isQuestionOpen) {
+      const canAcceptLateStreamAnswer =
+        (runtime.phase === 'ANSWER_REVEAL' || runtime.phase === 'LEADERBOARD') &&
+        serverNow <= runtime.questionEndsAt + LATE_STREAM_GRACE_MS;
+
+      if (canAcceptLateStreamAnswer) {
+        const lateResult = this.db.recordAndGradeLateStreamAnswer({
+          sessionId: runtime.sessionId,
+          questionId: currentQuestion.questionId,
+          playerId: playerRecord.id,
+          tiktokUserId: event.user.id,
+          selectedOption: normalizedAnswer,
+          correctOption: currentQuestion.correctOption,
+          receivedAt: serverNow,
+        });
+
+        if (lateResult.accepted) {
+          runtime.answeredCountCurrentQuestion++;
+          if (!runtime.answeredPlayersCurrentQuestion.some((p) => p.playerId === playerRecord.id)) {
+            runtime.answeredPlayersCurrentQuestion.push({
+              playerId: playerRecord.id,
+              nickname: event.user.nickname,
+              username: event.user.username,
+            });
+          }
+
+          if (
+            lateResult.summary &&
+            runtime.lastQuestionResult &&
+            runtime.lastQuestionResult.questionId === currentQuestion.questionId
+          ) {
+            runtime.lastQuestionResult = {
+              ...runtime.lastQuestionResult,
+              optionCounts: lateResult.summary.optionCounts,
+              correctPlayersCount: lateResult.summary.correctPlayersCount,
+              totalAnswersCount: lateResult.summary.totalAnswersCount,
+              fastestPlayers: lateResult.summary.fastestPlayers,
+              allAnswers: lateResult.summary.allAnswers,
+            };
+          }
+
+          runtime.leaderboard = this.db.getSessionLeaderboard(
+            runtime.sessionId,
+            currentQuestion.questionId
+          );
+
+          this.pushRecentEvent(runtime, {
+            id: event.id,
+            type: 'ANSWER_LOCKED',
+            nickname: event.user.nickname,
+            username: event.user.username,
+            summary: `chốt đáp án giây cuối (bù trễ sóng LIVE)!`,
+          });
+
+          this.scheduleCoalescedBroadcast(runtime, {
+            playerAnswered: {
+              playerId: playerRecord.id,
+              nickname: event.user.nickname,
+              username: event.user.username,
+            },
+            questionResult: true,
+            leaderboardUpdated: true,
+            roomState: true,
+          });
+
+          return {
+            handled: true,
+            action: 'LATE_STREAM_ANSWER_ACCEPTED',
+            acceptedAnswer: true,
+          };
+        }
+
+        return {
+          handled: false,
+          action: 'ANSWER_REJECTED',
+          acceptedAnswer: false,
+          reason: 'ALREADY_ANSWERED',
+        };
+      }
+
       this.pushRecentEvent(runtime, {
         id: event.id,
         type: 'LATE_ANSWER',
@@ -727,9 +927,10 @@ export class GameEngineService {
       };
     }
 
-    const currentQuestion = runtime.questions[runtime.currentQuestionIndex];
-    const playerRecord = this.db.upsertPlayer(runtime.sessionId, event.user);
-    const timeRemainingMs = Math.max(0, runtime.questionEndsAt - serverNow);
+    // Câu hỏi đang mở (bao gồm cả cửa sổ SERVER_CLOSE_GRACE_MS ở giây cuối):
+    // Đảm bảo người chơi trả lời ở giây cuối trên client luôn có tối thiểu 1000ms để được tính điểm tốc độ cơ bản
+    const rawRemainingMs = runtime.questionEndsAt - serverNow;
+    const timeRemainingMs = Math.max(1000, rawRemainingMs);
 
     const recordResult = this.db.recordFirstAnswer({
       sessionId: runtime.sessionId,
@@ -778,16 +979,15 @@ export class GameEngineService {
         : `đã chốt đáp án thành công!`,
     });
 
-    // Phát sự kiện người chơi vừa chốt đáp án (không lộ đáp án để chống nhìn bài)
-    this.realtime.emitToRoom(runtime.roomCode, 'player.answered', {
-      playerId: playerRecord.id,
-      nickname: event.user.nickname,
-      username: event.user.username,
-      answeredCount: runtime.answeredCountCurrentQuestion,
-      answeredPlayers: runtime.answeredPlayersCurrentQuestion.slice(-30),
-      playerCount: runtime.playersMap.size,
+    // Gom nhóm phát sự kiện (coalesced 60ms) để khi >15-200 người chơi bình luận cùng lúc không làm nghẽn mạng / đơ UI
+    this.scheduleCoalescedBroadcast(runtime, {
+      playerAnswered: {
+        playerId: playerRecord.id,
+        nickname: event.user.nickname,
+        username: event.user.username,
+      },
+      roomState: true,
     });
-    this.emitRoomState(runtime.roomCode);
 
     return {
       handled: true,
@@ -829,7 +1029,7 @@ export class GameEngineService {
           nickname: event.user.nickname,
           avatarUrl: event.user.avatarUrl,
         });
-        const playerRecord = this.db.upsertPlayer(runtime.sessionId, event.user);
+        const playerRecord = this.getOrUpsertSessionPlayer(runtime, event.user);
         if (matched.rewardType !== 'ELIMINATE_WRONG' && matched.rewardType !== 'NONE') {
           giftPoints = this.db.addGiftPoints(
             runtime.sessionId,
@@ -837,10 +1037,9 @@ export class GameEngineService {
             matched.rewardPoints ?? 100
           );
           runtime.leaderboard = this.db.getSessionLeaderboard(runtime.sessionId);
-          this.realtime.emitToRoom(runtime.roomCode, 'leaderboard.updated', {
-            leaderboard: runtime.leaderboard,
-            questionIndex: runtime.currentQuestionIndex + 1,
-            totalQuestions: runtime.questions.length,
+          this.scheduleCoalescedBroadcast(runtime, {
+            leaderboardUpdated: true,
+            roomState: true,
           });
         }
       }
@@ -887,10 +1086,7 @@ export class GameEngineService {
 
     this.realtime.emitToRoom(runtime.roomCode, 'gift.animation', animationPayload);
     if (sharedHintEliminated) {
-      this.emitRoomState(runtime.roomCode);
-    }
-    if (giftPoints > 0) {
-      this.emitRoomState(runtime.roomCode);
+      this.scheduleCoalescedBroadcast(runtime, { roomState: true });
     }
 
     return animationPayload;
@@ -937,7 +1133,7 @@ export class GameEngineService {
     for (const bot of selected) {
       runtime.playersMap.set(bot.id, bot);
       if (runtime.sessionId) {
-        this.db.upsertPlayer(runtime.sessionId, bot);
+        this.getOrUpsertSessionPlayer(runtime, bot);
       }
     }
   }
@@ -1084,7 +1280,7 @@ export class GameEngineService {
         if (bot) {
           runtime.playersMap.set(bot.id, bot);
           if (runtime.sessionId) {
-            this.db.upsertPlayer(runtime.sessionId, bot);
+            this.getOrUpsertSessionPlayer(runtime, bot);
           }
           // Nếu câu hỏi đang mở và còn hơn 2 giây, bot mới vào cũng trả lời luôn!
           if (
@@ -1119,7 +1315,7 @@ export class GameEngineService {
         }
       }
 
-      this.emitRoomState(runtime.roomCode);
+      this.scheduleCoalescedBroadcast(runtime, { roomState: true });
     }, 3000);
 
     return {

@@ -106,6 +106,7 @@ export interface RoomTikTokConnectionInfo {
 export class TikTokService {
   private readonly logger = new Logger(TikTokService.name);
   private readonly connections = new Map<string, RoomTikTokConnectionInfo>();
+  private readonly statusThrottleTimers = new Map<string, NodeJS.Timeout>();
 
   constructor(
     private readonly eventProcessor: EventProcessorService,
@@ -143,9 +144,28 @@ export class TikTokService {
   }
 
   private emitStatus(roomCode: string) {
-    const status = this.getConnectionStatus(roomCode);
-    this.realtime.emitToRoom(roomCode.toUpperCase(), 'tiktok.status', status);
+    const code = roomCode.toUpperCase();
+    const pendingTimer = this.statusThrottleTimers.get(code);
+    if (pendingTimer) {
+      clearTimeout(pendingTimer);
+      this.statusThrottleTimers.delete(code);
+    }
+    const status = this.getConnectionStatus(code);
+    this.realtime.emitToRoom(code, 'tiktok.status', status);
     return status;
+  }
+
+  private emitStatusThrottled(roomCode: string) {
+    const code = roomCode.toUpperCase();
+    if (this.statusThrottleTimers.has(code)) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      this.statusThrottleTimers.delete(code);
+      const status = this.getConnectionStatus(code);
+      this.realtime.emitToRoom(code, 'tiktok.status', status);
+    }, 600);
+    this.statusThrottleTimers.set(code, timer);
   }
 
   /**
@@ -235,7 +255,7 @@ export class TikTokService {
       connection.on(WebcastEvent.CHAT || 'chat', (data: TikTokConnectorChatPayload) => {
         connInfo.eventsReceived++;
         this.handleIncomingChat(code, data);
-        this.emitStatus(code);
+        this.emitStatusThrottled(code);
       });
 
       connection.on(WebcastEvent.GIFT || 'gift', (data: TikTokConnectorGiftPayload) => {
@@ -245,7 +265,7 @@ export class TikTokService {
         }
         connInfo.eventsReceived++;
         this.handleIncomingGift(code, data);
-        this.emitStatus(code);
+        this.emitStatusThrottled(code);
       });
 
       connection.on(WebcastEvent.MEMBER || 'member', (data: TikTokConnectorChatPayload) => {
@@ -373,8 +393,10 @@ export class TikTokService {
       u?.avatarThumb?.urlList?.[0],
       u?.avatarThumb?.url?.[0],
       u?.avatarMedium?.urls?.[0],
+      u?.avatarMedium?.urlList?.[0],
       u?.avatarMedium?.url?.[0],
       u?.avatarLarge?.urls?.[0],
+      u?.avatarLarge?.urlList?.[0],
       u?.profilePictureUrl,
       payload?.profilePictureUrl,
       payload?.avatarUrl,
@@ -387,26 +409,51 @@ export class TikTokService {
     return undefined;
   }
 
-  private handleIncomingChat(roomCode: string, payload: TikTokConnectorChatPayload) {
-    const userId = String(
-      payload.user?.id ||
-        payload.user?.userId ||
-        payload.userId ||
-        payload.user?.displayId ||
-        payload.user?.uniqueId ||
-        payload.uniqueId ||
-        uuidv4()
-    );
-    const username = String(
-      payload.user?.displayId ||
-        payload.user?.uniqueId ||
-        payload.uniqueId ||
-        userId
-    );
-    const nickname = String(
-      payload.user?.nickname || payload.nickname || username
-    );
+  private extractUserIdentity(payload: any): {
+    userId: string;
+    username: string;
+    nickname: string;
+    avatarUrl?: string;
+  } {
+    const u = payload?.user || {};
+    const pickValid = (...values: any[]): string | null => {
+      for (const v of values) {
+        if (v !== undefined && v !== null) {
+          const s = String(v).trim();
+          if (s.length > 0 && s !== '0' && s !== 'undefined' && s !== 'null') {
+            return s;
+          }
+        }
+      }
+      return null;
+    };
+
+    const userId =
+      pickValid(
+        u.id,
+        u.idStr,
+        u.userId,
+        payload?.userId,
+        u.secUid,
+        u.displayId,
+        u.uniqueId,
+        payload?.uniqueId,
+        u.nickname,
+        payload?.nickname
+      ) || uuidv4();
+
+    const username =
+      pickValid(u.displayId, u.uniqueId, payload?.uniqueId, u.nickname, payload?.nickname) ||
+      userId;
+
+    const nickname = pickValid(u.nickname, payload?.nickname, username) || username;
     const avatarUrl = this.extractAvatarUrl(payload);
+
+    return { userId, username, nickname, avatarUrl };
+  }
+
+  private handleIncomingChat(roomCode: string, payload: TikTokConnectorChatPayload) {
+    const { userId, username, nickname, avatarUrl } = this.extractUserIdentity(payload);
     const content = String(payload.content ?? payload.comment ?? '');
     const rawMsgId = payload.common?.msgId || payload.msgId;
     const eventId =
@@ -434,28 +481,12 @@ export class TikTokService {
   }
 
   private handleIncomingGift(roomCode: string, payload: TikTokConnectorGiftPayload) {
-    const userId = String(
-      payload.user?.id ||
-        payload.user?.userId ||
-        payload.userId ||
-        payload.user?.displayId ||
-        payload.user?.uniqueId ||
-        payload.uniqueId ||
-        uuidv4()
-    );
-    const username = String(
-      payload.user?.displayId ||
-        payload.user?.uniqueId ||
-        payload.uniqueId ||
-        userId
-    );
-    const nickname = String(
-      payload.user?.nickname || payload.nickname || username
-    );
-    const avatarUrl = this.extractAvatarUrl(payload);
-    const eventId = String(
-      payload.common?.msgId || payload.msgId || `tt-gift-${uuidv4()}`
-    );
+    const { userId, username, nickname, avatarUrl } = this.extractUserIdentity(payload);
+    const rawMsgId = payload.common?.msgId || payload.msgId;
+    const eventId =
+      rawMsgId && String(rawMsgId) !== '0'
+        ? `${rawMsgId}-${userId}`
+        : `tt-gift-${userId}-${uuidv4()}`;
     const giftName = String(
       payload.gift?.name ||
         payload.extendedGiftInfo?.name ||
@@ -492,28 +523,12 @@ export class TikTokService {
   }
 
   private handleIncomingJoin(roomCode: string, payload: TikTokConnectorChatPayload) {
-    const userId = String(
-      payload.user?.id ||
-        payload.user?.userId ||
-        payload.userId ||
-        payload.user?.displayId ||
-        payload.user?.uniqueId ||
-        payload.uniqueId ||
-        uuidv4()
-    );
-    const username = String(
-      payload.user?.displayId ||
-        payload.user?.uniqueId ||
-        payload.uniqueId ||
-        userId
-    );
-    const nickname = String(
-      payload.user?.nickname || payload.nickname || username
-    );
-    const avatarUrl = this.extractAvatarUrl(payload);
-    const eventId = String(
-      payload.common?.msgId || payload.msgId || `tt-join-${uuidv4()}`
-    );
+    const { userId, username, nickname, avatarUrl } = this.extractUserIdentity(payload);
+    const rawMsgId = payload.common?.msgId || payload.msgId;
+    const eventId =
+      rawMsgId && String(rawMsgId) !== '0'
+        ? `${rawMsgId}-${userId}`
+        : `tt-join-${userId}-${uuidv4()}`;
 
     const gameEvent: GameEvent = {
       id: eventId,

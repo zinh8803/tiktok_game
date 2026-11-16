@@ -1511,8 +1511,10 @@ onMounted(async () => {
   requestAnimationFrame(recalcAutoFit);
 
   socket = createRoomSocket(roomCode.value);
+  let lastResultSoundQuestionId = '';
 
   socket.on('room.state', (payload) => {
+    const prevPhase = roomState.value?.phase;
     roomState.value = payload;
     if (payload.recentEvents) {
       recentFeed.value = payload.recentEvents;
@@ -1521,7 +1523,9 @@ onMounted(async () => {
     if (payload.answeredPlayersCurrentQuestion) {
       answeredPlayers.value = payload.answeredPlayersCurrentQuestion;
     }
-    requestAnimationFrame(recalcAutoFit);
+    if (prevPhase !== payload.phase) {
+      requestAnimationFrame(recalcAutoFit);
+    }
   });
 
   socket.on('question.started', (payload) => {
@@ -1559,20 +1563,22 @@ onMounted(async () => {
     if (payload.answeredPlayers) {
       answeredPlayers.value = payload.answeredPlayers;
     }
-    requestAnimationFrame(recalcAutoFit);
   });
 
   socket.on('question.result', (payload) => {
+    const isFirstRevealForQuestion = lastResultSoundQuestionId !== String(payload?.questionId || '');
     questionResult.value = payload;
-    if (!isSoundMuted.value && Number(payload?.correctPlayersCount || 0) > 0) {
-      soundFX.playCorrectAnswer();
+    if (isFirstRevealForQuestion) {
+      lastResultSoundQuestionId = String(payload?.questionId || '');
+      if (!isSoundMuted.value && Number(payload?.correctPlayersCount || 0) > 0) {
+        soundFX.playCorrectAnswer();
+      }
+      requestAnimationFrame(recalcAutoFit);
     }
-    requestAnimationFrame(recalcAutoFit);
   });
 
   socket.on('leaderboard.updated', (payload) => {
     leaderboard.value = payload.leaderboard || [];
-    requestAnimationFrame(recalcAutoFit);
   });
 
   socket.on('game.finished', (payload) => {

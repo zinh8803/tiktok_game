@@ -113,28 +113,30 @@ export class EventProcessorService {
       };
     }
 
-    const isUniqueInDb = this.db.recordLiveEventIfUnique({
-      id: event.id,
-      roomId: event.roomId,
-      type: event.type,
-      userId: event.user.id,
-      username: event.user.username,
-      nickname: event.user.nickname,
-      payload: event.payload,
-      receivedAt: event.receivedAt,
-    });
+    if (event.type !== 'JOIN') {
+      const isUniqueInDb = this.db.recordLiveEventIfUnique({
+        id: event.id,
+        roomId: event.roomId,
+        type: event.type,
+        userId: event.user.id,
+        username: event.user.username,
+        nickname: event.user.nickname,
+        payload: event.payload,
+        receivedAt: event.receivedAt,
+      });
 
-    if (!isUniqueInDb) {
-      this.logger.debug(`Duplicate event ignored (database): ${event.id}`);
-      return {
-        processed: false,
-        reason: 'DUPLICATE_EVENT_ID',
-        eventId: event.id,
-      };
+      if (!isUniqueInDb) {
+        this.logger.debug(`Duplicate event ignored (database): ${event.id}`);
+        return {
+          processed: false,
+          reason: 'DUPLICATE_EVENT_ID',
+          eventId: event.id,
+        };
+      }
     }
 
     this.processedEventIds.add(event.id);
-    if (this.processedEventIds.size > 10000) {
+    if (this.processedEventIds.size > 20000) {
       const firstKey = this.processedEventIds.values().next().value;
       if (firstKey) this.processedEventIds.delete(firstKey);
     }
