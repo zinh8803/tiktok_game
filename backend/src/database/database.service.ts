@@ -19,6 +19,7 @@ import {
   LeaderboardEntry,
   OptionLabel,
   QuestionDifficulty,
+  QuestionRatioSettings,
   QuestionRecord,
   QuestionStatus,
   RoomStatus,
@@ -66,6 +67,7 @@ export class DatabaseService implements OnModuleInit {
     this.db.exec(schemaSql);
     this.ensureGiftRewardColumns();
     this.ensurePerformanceIndexes();
+    this.ensureSystemSettingsTable();
 
     this.seedIfEmpty();
     this.logger.log(`SQLite Database initialized at ${this.dbPath}`);
@@ -107,6 +109,83 @@ export class DatabaseService implements OnModuleInit {
          WHERE effect_type = 'SHARED_HINT' AND reward_type = 'POINTS'`
       )
       .run();
+  }
+
+  private ensureSystemSettingsTable() {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS system_settings (
+        key VARCHAR(64) PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    const existing = this.db
+      .prepare(`SELECT value FROM system_settings WHERE key = 'question_ratio'`)
+      .get() as { value: string } | undefined;
+
+    if (!existing) {
+      const defaultRatio: QuestionRatioSettings = {
+        easyPercent: 40,
+        mediumPercent: 40,
+        hardPercent: 20,
+        progressionOrder: 'PROGRESSIVE',
+      };
+      this.db
+        .prepare(`INSERT OR REPLACE INTO system_settings (key, value) VALUES ('question_ratio', ?)`)
+        .run(JSON.stringify(defaultRatio));
+    }
+  }
+
+  public getQuestionRatioConfig(): QuestionRatioSettings {
+    try {
+      const row = this.db
+        .prepare(`SELECT value FROM system_settings WHERE key = 'question_ratio'`)
+        .get() as { value: string } | undefined;
+      if (row?.value) {
+        const parsed = JSON.parse(row.value);
+        return {
+          easyPercent: Number(parsed.easyPercent) || 40,
+          mediumPercent: Number(parsed.mediumPercent) || 40,
+          hardPercent: Number(parsed.hardPercent) || 20,
+          progressionOrder: parsed.progressionOrder === 'SHUFFLED' ? 'SHUFFLED' : 'PROGRESSIVE',
+        };
+      }
+    } catch {
+      // ignore
+    }
+    return {
+      easyPercent: 40,
+      mediumPercent: 40,
+      hardPercent: 20,
+      progressionOrder: 'PROGRESSIVE',
+    };
+  }
+
+  public setQuestionRatioConfig(config: Partial<QuestionRatioSettings>): QuestionRatioSettings {
+    const current = this.getQuestionRatioConfig();
+    let easy = Math.max(0, Math.min(100, Math.round(Number(config.easyPercent ?? current.easyPercent))));
+    let medium = Math.max(0, Math.min(100, Math.round(Number(config.mediumPercent ?? current.mediumPercent))));
+    let hard = Math.max(0, Math.min(100, Math.round(Number(config.hardPercent ?? current.hardPercent))));
+    const order = config.progressionOrder === 'SHUFFLED' ? 'SHUFFLED' : 'PROGRESSIVE';
+
+    if (easy + medium + hard === 0) {
+      easy = 40;
+      medium = 40;
+      hard = 20;
+    }
+
+    const updated: QuestionRatioSettings = {
+      easyPercent: easy,
+      mediumPercent: medium,
+      hardPercent: hard,
+      progressionOrder: order,
+    };
+
+    this.db
+      .prepare(`INSERT OR REPLACE INTO system_settings (key, value, updated_at) VALUES ('question_ratio', ?, CURRENT_TIMESTAMP)`)
+      .run(JSON.stringify(updated));
+
+    return updated;
   }
 
   public runInTransaction<T>(fn: () => T): T {
@@ -629,7 +708,14 @@ export class DatabaseService implements OnModuleInit {
 
   /**
    * Chọn câu hỏi PUBLISHED cho trận đấu theo cấu hình phòng (Mục 4.5)
-   * Hạn chế lặp câu hỏi trong trận gần nhất và tạo snapshot cố định
+   * Tỉ lệ phân bổ độ khó khi chọn Hỗn hợp (ALL): 40% Dễ - 40% Trung bình - 20% Khó
+   * Ví dụ:
+   *  - 10 câu: 4 Dễ, 4 TB, 2 Khó
+   *  - 20 câu: 8 Dễ, 8 TB, 4 Khó
+   *  - 30 câu: 12 Dễ, 12 TB, 6 Khó
+   *  - 40 câu: 16 Dễ, 16 TB, 8 Khó
+   * Sắp xếp theo thứ tự lũy tiến hấp dẫn: Dễ (khởi động) -> Trung bình (tăng tốc) -> Khó (về đích).
+   * Hạn chế lặp câu hỏi qua lịch sử các trận gần nhất và xáo trộn vị trí đáp án.
    */
   public selectQuestionsForSession(config: {
     categoryId?: string | null;
@@ -638,49 +724,7 @@ export class DatabaseService implements OnModuleInit {
     timePerQuestion: number;
     roomId: string;
   }): SessionQuestionSnapshot[] {
-    const conditions = [`q.status = 'PUBLISHED'`];
-    const params: any[] = [];
-
-    if (config.categoryId && config.categoryId !== 'ALL') {
-      conditions.push(`q.category_id = ?`);
-      params.push(config.categoryId);
-    }
-    if (config.difficulty && config.difficulty !== 'ALL') {
-      conditions.push(`q.difficulty = ?`);
-      params.push(config.difficulty);
-    }
-
-    let rows = this.db
-      .prepare(
-        `SELECT q.*, c.name as category_name
-         FROM questions q
-         LEFT JOIN question_categories c ON c.id = q.category_id
-         WHERE ${conditions.join(' AND ')}`
-      )
-      .all(...params) as any[];
-
-    const isRunAll = !config.questionCount || config.questionCount <= 0 || config.questionCount >= 9999;
-
-    // Fallback nếu bộ lọc quá hẹp không đủ số câu (khi chọn số câu cụ thể hoặc khi bộ lọc rỗng)
-    if (rows.length === 0 || (!isRunAll && rows.length < config.questionCount)) {
-      const existingIds = new Set(rows.map((r) => r.id));
-      const fallbackRows = this.db
-        .prepare(
-          `SELECT q.*, c.name as category_name
-           FROM questions q
-           LEFT JOIN question_categories c ON c.id = q.category_id
-           WHERE q.status = 'PUBLISHED'`
-        )
-        .all() as any[];
-      for (const fb of fallbackRows) {
-        if (!existingIds.has(fb.id)) {
-          rows.push(fb);
-        }
-      }
-    }
-
-    // Lấy lịch sử sử dụng câu hỏi của phòng để đảm bảo quay vòng toàn bộ 800+ câu hỏi:
-    // Không bao giờ lặp lại câu hỏi cho đến khi tất cả câu hỏi trong ngân hàng đều đã được chơi!
+    // 1. Lấy lịch sử sử dụng câu hỏi của phòng để chống lặp
     const recentSessions = this.db
       .prepare(
         `SELECT questions_snapshot FROM game_sessions
@@ -704,44 +748,194 @@ export class DatabaseService implements OnModuleInit {
       }
     });
 
-    // 1. Nhóm chưa từng chơi bao giờ (neverUsed): Ưu tiên tuyệt đối cao nhất
-    // 2. Nhóm đã chơi (usedGroupedByAge): Nhóm theo độ tuổi trận để lấy câu chơi lâu nhất trước
-    const neverUsed: any[] = [];
-    const usedGroupedByAge = new Map<number, any[]>();
-
-    for (const r of rows) {
-      const sIdx = lastUsedSessionIndex.get(r.id);
-      if (sIdx === undefined) {
-        neverUsed.push(r);
-      } else {
-        const list = usedGroupedByAge.get(sIdx) || [];
-        list.push(r);
-        usedGroupedByAge.set(sIdx, list);
-      }
-    }
-
-    const shuffle = <T>(arr: T[]) => {
-      for (let i = arr.length - 1; i > 0; i--) {
+    const shuffle = <T>(arr: T[]): T[] => {
+      const copy = [...arr];
+      for (let i = copy.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [arr[i], arr[j]] = [arr[j], arr[i]];
+        [copy[i], copy[j]] = [copy[j], copy[i]];
       }
-      return arr;
+      return copy;
     };
 
-    // Sắp xếp các câu đã chơi theo thứ tự từ lâu nhất đến gần nhất (sessionIdx lớn nhất lên đầu)
-    const sortedAges = Array.from(usedGroupedByAge.keys()).sort((a, b) => b - a);
-    const sortedUsedPool: any[] = [];
-    for (const age of sortedAges) {
-      const itemsOfSameAge = usedGroupedByAge.get(age) || [];
-      sortedUsedPool.push(...shuffle(itemsOfSameAge));
-    }
+    // Helper sắp xếp ưu tiên: câu chưa từng chơi lên đầu (được xáo trộn), tiếp theo là câu chơi lâu nhất
+    const prioritizeByUsage = (pool: any[]): any[] => {
+      const neverUsed: any[] = [];
+      const usedGroupedByAge = new Map<number, any[]>();
+      for (const r of pool) {
+        const sIdx = lastUsedSessionIndex.get(r.id);
+        if (sIdx === undefined) {
+          neverUsed.push(r);
+        } else {
+          const list = usedGroupedByAge.get(sIdx) || [];
+          list.push(r);
+          usedGroupedByAge.set(sIdx, list);
+        }
+      }
+      const sortedAges = Array.from(usedGroupedByAge.keys()).sort((a, b) => b - a);
+      const sortedUsedPool: any[] = [];
+      for (const age of sortedAges) {
+        sortedUsedPool.push(...shuffle(usedGroupedByAge.get(age) || []));
+      }
+      return [...shuffle(neverUsed), ...sortedUsedPool];
+    };
 
-    const combinedPool = isRunAll
-      ? shuffle([...rows])
-      : [...shuffle(neverUsed), ...sortedUsedPool];
-    const selected = isRunAll
-      ? combinedPool
-      : combinedPool.slice(0, Math.max(1, config.questionCount));
+    const isRunAll = !config.questionCount || config.questionCount <= 0 || config.questionCount >= 9999;
+    const isSpecificDifficulty = !!(config.difficulty && config.difficulty !== 'ALL');
+
+    let selected: any[] = [];
+
+    if (isSpecificDifficulty) {
+      // 2A. Streamer chọn 1 độ khó cụ thể (EASY, MEDIUM, hoặc HARD)
+      const conditions = [`q.status = 'PUBLISHED'`, `q.difficulty = ?`];
+      const params: any[] = [config.difficulty];
+      if (config.categoryId && config.categoryId !== 'ALL') {
+        conditions.push(`q.category_id = ?`);
+        params.push(config.categoryId);
+      }
+
+      let rows = this.db
+        .prepare(
+          `SELECT q.*, c.name as category_name
+           FROM questions q
+           LEFT JOIN question_categories c ON c.id = q.category_id
+           WHERE ${conditions.join(' AND ')}`
+        )
+        .all(...params) as any[];
+
+      // Fallback nếu không đủ câu trong danh mục đó
+      if (rows.length === 0 || (!isRunAll && rows.length < config.questionCount)) {
+        const existingIds = new Set(rows.map((r) => r.id));
+        const fallbackRows = this.db
+          .prepare(
+            `SELECT q.*, c.name as category_name
+             FROM questions q
+             LEFT JOIN question_categories c ON c.id = q.category_id
+             WHERE q.status = 'PUBLISHED' AND q.difficulty = ?`
+          )
+          .all(config.difficulty) as any[];
+        for (const fb of fallbackRows) {
+          if (!existingIds.has(fb.id)) {
+            rows.push(fb);
+          }
+        }
+      }
+
+      const prioritized = prioritizeByUsage(rows);
+      selected = isRunAll ? (prioritized.length ? prioritized : rows) : prioritized.slice(0, Math.max(1, config.questionCount));
+    } else {
+      // 2B. Hỗn hợp (ALL): Phân bổ tỉ lệ chuẩn 4 Dễ (40%) - 4 Trung bình (40%) - 2 Khó (20%)
+      const conditions = [`q.status = 'PUBLISHED'`];
+      const params: any[] = [];
+      if (config.categoryId && config.categoryId !== 'ALL') {
+        conditions.push(`q.category_id = ?`);
+        params.push(config.categoryId);
+      }
+
+      const catRows = this.db
+        .prepare(
+          `SELECT q.*, c.name as category_name
+           FROM questions q
+           LEFT JOIN question_categories c ON c.id = q.category_id
+           WHERE ${conditions.join(' AND ')}`
+        )
+        .all(...params) as any[];
+
+      let easyPool = catRows.filter((r) => r.difficulty === 'EASY');
+      let mediumPool = catRows.filter((r) => r.difficulty === 'MEDIUM');
+      let hardPool = catRows.filter((r) => r.difficulty === 'HARD');
+
+      const ratio = this.getQuestionRatioConfig();
+
+      if (isRunAll) {
+        // Chạy toàn bộ ngân hàng câu hỏi: sắp xếp theo cấu hình Admin (lũy tiến hoặc ngẫu nhiên)
+        const ordEasy = prioritizeByUsage(easyPool);
+        const ordMedium = prioritizeByUsage(mediumPool);
+        const ordHard = prioritizeByUsage(hardPool);
+        const combined = [...ordEasy, ...ordMedium, ...ordHard];
+        selected = ratio.progressionOrder === 'SHUFFLED' ? shuffle(combined) : combined;
+      } else {
+        const total = Math.max(1, config.questionCount);
+        const sumPct = ratio.easyPercent + ratio.mediumPercent + ratio.hardPercent || 100;
+        const targetEasy = Math.round(total * (ratio.easyPercent / sumPct));
+        const targetMedium = Math.round(total * (ratio.mediumPercent / sumPct));
+        const targetHard = Math.max(0, total - targetEasy - targetMedium);
+
+        // Fallback mở rộng ngân hàng nếu danh mục hiện tại thiếu câu ở bất kỳ độ khó nào
+        const checkAndEnrichPool = (pool: any[], diff: string, targetCount: number) => {
+          if (pool.length < targetCount) {
+            const existingIds = new Set(pool.map((r) => r.id));
+            const globalFallback = this.db
+              .prepare(
+                `SELECT q.*, c.name as category_name
+                 FROM questions q
+                 LEFT JOIN question_categories c ON c.id = q.category_id
+                 WHERE q.status = 'PUBLISHED' AND q.difficulty = ?`
+              )
+              .all(diff) as any[];
+            for (const fb of globalFallback) {
+              if (!existingIds.has(fb.id)) {
+                pool.push(fb);
+                existingIds.add(fb.id);
+              }
+            }
+          }
+          return pool;
+        };
+
+        easyPool = checkAndEnrichPool(easyPool, 'EASY', targetEasy);
+        mediumPool = checkAndEnrichPool(mediumPool, 'MEDIUM', targetMedium);
+        hardPool = checkAndEnrichPool(hardPool, 'HARD', targetHard);
+
+        const orderedEasy = prioritizeByUsage(easyPool);
+        const orderedMedium = prioritizeByUsage(mediumPool);
+        const orderedHard = prioritizeByUsage(hardPool);
+
+        const pickedEasy = orderedEasy.slice(0, targetEasy);
+        const pickedMedium = orderedMedium.slice(0, targetMedium);
+        const pickedHard = orderedHard.slice(0, targetHard);
+
+        // Xếp theo tiến trình kịch tính chuẩn: Dễ (khởi động) -> Trung bình (tăng tốc) -> Khó (về đích)
+        const combined = [...pickedEasy, ...pickedMedium, ...pickedHard];
+        const pickedIds = new Set(combined.map((r) => r.id));
+
+        // Nếu một nhóm bị thiếu số lượng cần thiết, bổ sung từ các câu dư ở nhóm khác
+        if (combined.length < total) {
+          const leftovers = [
+            ...orderedEasy.slice(targetEasy),
+            ...orderedMedium.slice(targetMedium),
+            ...orderedHard.slice(targetHard),
+          ];
+          for (const item of leftovers) {
+            if (combined.length >= total) break;
+            if (!pickedIds.has(item.id)) {
+              combined.push(item);
+              pickedIds.add(item.id);
+            }
+          }
+        }
+
+        // Nếu vẫn chưa đủ (ví dụ tổng câu PUBLISHED trong hệ thống nhỏ hơn total), lấy bất kỳ câu nào còn lại
+        if (combined.length < total) {
+          const allPublished = this.db
+            .prepare(
+              `SELECT q.*, c.name as category_name
+               FROM questions q
+               LEFT JOIN question_categories c ON c.id = q.category_id
+               WHERE q.status = 'PUBLISHED'`
+            )
+            .all() as any[];
+          for (const item of prioritizeByUsage(allPublished)) {
+            if (combined.length >= total) break;
+            if (!pickedIds.has(item.id)) {
+              combined.push(item);
+              pickedIds.add(item.id);
+            }
+          }
+        }
+
+        selected = ratio.progressionOrder === 'SHUFFLED' ? shuffle(combined) : combined;
+      }
+    }
     const labels: OptionLabel[] = ['A', 'B', 'C', 'D'];
 
     return selected.map((row, idx) => {

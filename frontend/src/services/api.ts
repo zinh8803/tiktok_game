@@ -135,5 +135,29 @@ export const api = {
     request<any>(`/gifts/${id}`, {
       method: 'DELETE',
     }),
+
+  // Ratio settings
+  getRatioSettings: () =>
+    request<{
+      easyPercent: number;
+      mediumPercent: number;
+      hardPercent: number;
+      progressionOrder: 'PROGRESSIVE' | 'SHUFFLED';
+    }>('/settings/ratio'),
+  updateRatioSettings: (payload: {
+    easyPercent: number;
+    mediumPercent: number;
+    hardPercent: number;
+    progressionOrder: 'PROGRESSIVE' | 'SHUFFLED';
+  }) =>
+    request<{
+      easyPercent: number;
+      mediumPercent: number;
+      hardPercent: number;
+      progressionOrder: 'PROGRESSIVE' | 'SHUFFLED';
+    }>('/settings/ratio', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
 };
 

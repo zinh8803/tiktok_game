@@ -59,6 +59,15 @@
           <ClipboardCheck :size="16" />
           <span>Lịch Sử Kiểm Duyệt</span>
         </button>
+        <button
+          type="button"
+          class="btn"
+          :class="activeTab === 'ratio' ? 'btn-cyan' : 'btn-secondary'"
+          @click="activeTab = 'ratio'"
+        >
+          <Sliders :size="16" />
+          <span>Tỉ Lệ Ra Đề ({{ ratioForm.easyPercent }}/{{ ratioForm.mediumPercent }}/{{ ratioForm.hardPercent }})</span>
+        </button>
       </div>
     </header>
 
@@ -651,23 +660,281 @@
         </div>
       </div>
     </section>
+
+    <!-- TAB 5: CẤU HÌNH TỈ LỆ RA ĐỀ (DIFFICULTY RATIO) -->
+    <section v-else-if="activeTab === 'ratio'" class="admin-section">
+      <div class="panel-card ratio-config-panel">
+        <div class="panel-header-row">
+          <div>
+            <h2>⚙️ Cấu Hình Tỉ Lệ Độ Khó Câu Hỏi (Trận Đấu Hỗn Hợp)</h2>
+            <p class="panel-desc">
+              Tùy chỉnh tỉ lệ xuất hiện của câu Dễ, Trung bình và Khó khi streamer chọn chế độ "Hỗn hợp".
+              Hệ thống sẽ tự động phân bổ câu hỏi theo tỉ lệ này cho mọi quy mô trận đấu (5, 10, 20, 30, 40 câu...).
+            </p>
+          </div>
+          <button type="button" class="btn btn-secondary" @click="resetToDefaultRatio">
+            Khôi phục mặc định (40/40/20)
+          </button>
+        </div>
+
+        <!-- PRESET SHORTCUTS -->
+        <div class="ratio-presets-row">
+          <span class="preset-label">Mẫu gợi ý sẵn:</span>
+          <button
+            type="button"
+            class="preset-chip"
+            :class="{ active: isPresetActive(40, 40, 20) }"
+            @click="applyPreset(40, 40, 20)"
+          >
+            🎯 Chuẩn Gameshow (40% Dễ - 40% TB - 20% Khó)
+          </button>
+          <button
+            type="button"
+            class="preset-chip"
+            :class="{ active: isPresetActive(50, 30, 20) }"
+            @click="applyPreset(50, 30, 20)"
+          >
+            🌟 Khởi Động Nhẹ Nhàng (50% Dễ - 30% TB - 20% Khó)
+          </button>
+          <button
+            type="button"
+            class="preset-chip"
+            :class="{ active: isPresetActive(34, 33, 33) }"
+            @click="applyPreset(34, 33, 33)"
+          >
+            ⚖️ Cân Bằng Đều (34% Dễ - 33% TB - 33% Khó)
+          </button>
+          <button
+            type="button"
+            class="preset-chip"
+            :class="{ active: isPresetActive(20, 40, 40) }"
+            @click="applyPreset(20, 40, 40)"
+          >
+            🔥 Thử Thách Gay Cấn (20% Dễ - 40% TB - 40% Khó)
+          </button>
+          <button
+            type="button"
+            class="preset-chip"
+            :class="{ active: isPresetActive(10, 30, 60) }"
+            @click="applyPreset(10, 30, 60)"
+          >
+            💀 Cực Khó / Đấu Trí (10% Dễ - 30% TB - 60% Khó)
+          </button>
+        </div>
+
+        <!-- VISUAL RATIO BAR -->
+        <div class="visual-bar-card">
+          <div class="bar-header">
+            <span>Biểu đồ phân bổ tỉ lệ</span>
+            <span :class="totalRatioPercent === 100 ? 'text-success' : 'text-warning'">
+              Tổng: <strong>{{ totalRatioPercent }}%</strong>
+              <small v-if="totalRatioPercent !== 100"> (Tự động chuẩn hóa về 100% khi ra đề)</small>
+            </span>
+          </div>
+          <div class="segmented-ratio-bar">
+            <div
+              class="bar-segment bar-easy"
+              :style="{ width: ratioBarPercent.easy + '%' }"
+              title="Dễ"
+            >
+              <span v-if="ratioBarPercent.easy >= 12">Dễ {{ ratioForm.easyPercent }}%</span>
+            </div>
+            <div
+              class="bar-segment bar-medium"
+              :style="{ width: ratioBarPercent.medium + '%' }"
+              title="Trung bình"
+            >
+              <span v-if="ratioBarPercent.medium >= 12">TB {{ ratioForm.mediumPercent }}%</span>
+            </div>
+            <div
+              class="bar-segment bar-hard"
+              :style="{ width: ratioBarPercent.hard + '%' }"
+              title="Khó"
+            >
+              <span v-if="ratioBarPercent.hard >= 12">Khó {{ ratioForm.hardPercent }}%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- SLIDERS GRID -->
+        <div class="ratio-sliders-grid">
+          <!-- EASY -->
+          <div class="slider-box box-easy">
+            <div class="slider-box-head">
+              <span class="diff-badge badge-easy">🟢 Câu Dễ (EASY)</span>
+              <div class="input-with-pct">
+                <input
+                  v-model.number="ratioForm.easyPercent"
+                  type="number"
+                  min="0"
+                  max="100"
+                  class="input-control pct-input"
+                  @input="clampRatioValues"
+                />
+                <span class="pct-unit">%</span>
+              </div>
+            </div>
+            <p class="slider-desc">Câu hỏi khởi động, giúp khán giả bình luận đáp án hào hứng.</p>
+            <input
+              v-model.number="ratioForm.easyPercent"
+              type="range"
+              min="0"
+              max="100"
+              step="5"
+              class="range-slider range-easy"
+              @input="clampRatioValues"
+            />
+          </div>
+
+          <!-- MEDIUM -->
+          <div class="slider-box box-medium">
+            <div class="slider-box-head">
+              <span class="diff-badge badge-medium">🟡 Câu Trung Bình (MEDIUM)</span>
+              <div class="input-with-pct">
+                <input
+                  v-model.number="ratioForm.mediumPercent"
+                  type="number"
+                  min="0"
+                  max="100"
+                  class="input-control pct-input"
+                  @input="clampRatioValues"
+                />
+                <span class="pct-unit">%</span>
+              </div>
+            </div>
+            <p class="slider-desc">Câu hỏi nâng cao, bắt đầu sàng lọc và phân loại người chơi.</p>
+            <input
+              v-model.number="ratioForm.mediumPercent"
+              type="range"
+              min="0"
+              max="100"
+              step="5"
+              class="range-slider range-medium"
+              @input="clampRatioValues"
+            />
+          </div>
+
+          <!-- HARD -->
+          <div class="slider-box box-hard">
+            <div class="slider-box-head">
+              <span class="diff-badge badge-hard">🔴 Câu Khó (HARD)</span>
+              <div class="input-with-pct">
+                <input
+                  v-model.number="ratioForm.hardPercent"
+                  type="number"
+                  min="0"
+                  max="100"
+                  class="input-control pct-input"
+                  @input="clampRatioValues"
+                />
+                <span class="pct-unit">%</span>
+              </div>
+            </div>
+            <p class="slider-desc">Câu hỏi quyết định chung cuộc, gay cấn & phân định thắng bại.</p>
+            <input
+              v-model.number="ratioForm.hardPercent"
+              type="range"
+              min="0"
+              max="100"
+              step="5"
+              class="range-slider range-hard"
+              @input="clampRatioValues"
+            />
+          </div>
+        </div>
+
+        <!-- PROGRESSION ORDER SELECTOR -->
+        <div class="progression-box">
+          <label class="progression-title">Trình tự xuất hiện câu hỏi trong trận đấu:</label>
+          <div class="progression-options">
+            <label class="progression-radio" :class="{ selected: ratioForm.progressionOrder === 'PROGRESSIVE' }">
+              <input
+                v-model="ratioForm.progressionOrder"
+                type="radio"
+                value="PROGRESSIVE"
+              />
+              <div class="radio-content">
+                <strong>🚀 Lũy tiến kịch tính (Khuyên dùng)</strong>
+                <span>Dễ (Khởi động) → Trung bình (Tăng tốc) → Khó (Về đích phân định thứ hạng)</span>
+              </div>
+            </label>
+            <label class="progression-radio" :class="{ selected: ratioForm.progressionOrder === 'SHUFFLED' }">
+              <input
+                v-model="ratioForm.progressionOrder"
+                type="radio"
+                value="SHUFFLED"
+              />
+              <div class="radio-content">
+                <strong>🎲 Xáo trộn ngẫu nhiên</strong>
+                <span>Các mức độ Dễ, Trung bình, Khó xuất hiện xen kẽ ngẫu nhiên trong trận</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- LIVE PREVIEW TABLE -->
+        <div class="preview-section">
+          <div class="preview-header">
+            <h3>📋 Xem Trước Số Lượng Câu Hỏi Thực Tế Theo Cấu Hình Hiện Tại</h3>
+            <span class="preview-sub">Tự động chia theo tỉ lệ {{ ratioForm.easyPercent }}% Dễ / {{ ratioForm.mediumPercent }}% TB / {{ ratioForm.hardPercent }}% Khó</span>
+          </div>
+
+          <div class="table-responsive">
+            <table class="preview-table tabular-nums">
+              <thead>
+                <tr>
+                  <th>Số câu / trận</th>
+                  <th class="col-easy">🟢 Số câu Dễ (EASY)</th>
+                  <th class="col-medium">🟡 Số câu Trung Bình (MEDIUM)</th>
+                  <th class="col-hard">🔴 Số câu Khó (HARD)</th>
+                  <th>Tổng số câu</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="cnt in [5, 10, 15, 20, 30, 40, 50, 100]" :key="cnt">
+                  <td><strong>{{ cnt }} câu</strong></td>
+                  <td class="col-easy text-bold">{{ computeBreakdown(cnt).easy }} câu</td>
+                  <td class="col-medium text-bold">{{ computeBreakdown(cnt).medium }} câu</td>
+                  <td class="col-hard text-bold">{{ computeBreakdown(cnt).hard }} câu</td>
+                  <td><span class="badge badge-purple">{{ cnt }} câu</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ACTION BUTTON -->
+        <div class="panel-actions">
+          <button
+            type="button"
+            class="btn btn-cyan btn-large"
+            :disabled="isSavingRatio"
+            @click="saveRatioConfig"
+          >
+            <Save :size="18" />
+            <span>{{ isSavingRatio ? 'Đang lưu...' : '💾 Lưu Cấu Hình Tỉ Lệ' }}</span>
+          </button>
+        </div>
+      </div>
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import {
   ArrowLeft,
   BookOpen,
   PlusCircle,
   Sparkles,
   ClipboardCheck,
+  Sliders,
   Check,
   Save,
 } from 'lucide-vue-next';
 import { api } from '../services/api';
 
-const activeTab = ref<'questions' | 'create' | 'gifts' | 'reviews'>('questions');
+const activeTab = ref<'questions' | 'create' | 'gifts' | 'reviews' | 'ratio'>('questions');
 const categories = ref<any[]>([]);
 const questions = ref<any[]>([]);
 const gifts = ref<any[]>([]);
@@ -675,6 +942,88 @@ const reviews = ref<any[]>([]);
 const statusNotice = ref('');
 const editingQuestionId = ref<string | null>(null);
 const isGeneratingRandom = ref(false);
+
+const ratioForm = reactive({
+  easyPercent: 40,
+  mediumPercent: 40,
+  hardPercent: 20,
+  progressionOrder: 'PROGRESSIVE' as 'PROGRESSIVE' | 'SHUFFLED',
+});
+const isSavingRatio = ref(false);
+
+const totalRatioPercent = computed(() => {
+  return (
+    Number(ratioForm.easyPercent || 0) +
+    Number(ratioForm.mediumPercent || 0) +
+    Number(ratioForm.hardPercent || 0)
+  );
+});
+
+const ratioBarPercent = computed(() => {
+  const sum = totalRatioPercent.value || 100;
+  return {
+    easy: Math.round(((Number(ratioForm.easyPercent) || 0) / sum) * 100),
+    medium: Math.round(((Number(ratioForm.mediumPercent) || 0) / sum) * 100),
+    hard: Math.round(((Number(ratioForm.hardPercent) || 0) / sum) * 100),
+  };
+});
+
+function computeBreakdown(total: number) {
+  const sum = totalRatioPercent.value || 100;
+  const easy = Math.round(total * ((Number(ratioForm.easyPercent) || 0) / sum));
+  const medium = Math.round(total * ((Number(ratioForm.mediumPercent) || 0) / sum));
+  const hard = Math.max(0, total - easy - medium);
+  return { easy, medium, hard };
+}
+
+function clampRatioValues() {
+  if (ratioForm.easyPercent < 0) ratioForm.easyPercent = 0;
+  if (ratioForm.mediumPercent < 0) ratioForm.mediumPercent = 0;
+  if (ratioForm.hardPercent < 0) ratioForm.hardPercent = 0;
+  if (ratioForm.easyPercent > 100) ratioForm.easyPercent = 100;
+  if (ratioForm.mediumPercent > 100) ratioForm.mediumPercent = 100;
+  if (ratioForm.hardPercent > 100) ratioForm.hardPercent = 100;
+}
+
+function applyPreset(easy: number, med: number, hard: number) {
+  ratioForm.easyPercent = easy;
+  ratioForm.mediumPercent = med;
+  ratioForm.hardPercent = hard;
+}
+
+function isPresetActive(easy: number, med: number, hard: number) {
+  return (
+    Number(ratioForm.easyPercent) === easy &&
+    Number(ratioForm.mediumPercent) === med &&
+    Number(ratioForm.hardPercent) === hard
+  );
+}
+
+function resetToDefaultRatio() {
+  applyPreset(40, 40, 20);
+  ratioForm.progressionOrder = 'PROGRESSIVE';
+}
+
+async function saveRatioConfig() {
+  isSavingRatio.value = true;
+  try {
+    const res = await api.updateRatioSettings({
+      easyPercent: Number(ratioForm.easyPercent) || 0,
+      mediumPercent: Number(ratioForm.mediumPercent) || 0,
+      hardPercent: Number(ratioForm.hardPercent) || 0,
+      progressionOrder: ratioForm.progressionOrder,
+    });
+    ratioForm.easyPercent = res.easyPercent;
+    ratioForm.mediumPercent = res.mediumPercent;
+    ratioForm.hardPercent = res.hardPercent;
+    ratioForm.progressionOrder = res.progressionOrder || 'PROGRESSIVE';
+    statusNotice.value = `Đã lưu cấu hình tỉ lệ câu hỏi (${res.easyPercent}% Dễ - ${res.mediumPercent}% TB - ${res.hardPercent}% Khó, ${res.progressionOrder === 'PROGRESSIVE' ? 'Lũy tiến' : 'Xáo trộn'}) thành công!`;
+  } catch (err: any) {
+    statusNotice.value = `Lỗi lưu tỉ lệ câu hỏi: ${err.message}`;
+  } finally {
+    isSavingRatio.value = false;
+  }
+}
 
 const filters = reactive({
   search: '',
@@ -874,16 +1223,23 @@ async function loadQuestions() {
 }
 
 async function loadAllAdminData() {
-  const [cats, qList, giftList, revList] = await Promise.all([
+  const [cats, qList, giftList, revList, ratio] = await Promise.all([
     api.getCategories(),
     api.getQuestions(filters),
     api.getGifts(),
     api.getReviews(),
+    api.getRatioSettings(),
   ]);
   categories.value = cats;
   questions.value = qList;
   gifts.value = giftList;
   reviews.value = revList;
+  if (ratio) {
+    ratioForm.easyPercent = ratio.easyPercent;
+    ratioForm.mediumPercent = ratio.mediumPercent;
+    ratioForm.hardPercent = ratio.hardPercent;
+    ratioForm.progressionOrder = ratio.progressionOrder || 'PROGRESSIVE';
+  }
 }
 
 function openCreateQuestion() {
@@ -1614,6 +1970,360 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+}
+
+/* =====================================================================
+   RATIO CONFIG PANEL STYLES
+   ===================================================================== */
+.ratio-config-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.panel-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 1rem;
+}
+
+.panel-desc {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  margin-top: 0.35rem;
+  line-height: 1.45;
+}
+
+.ratio-presets-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+}
+
+.preset-label {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.preset-chip {
+  padding: 0.35rem 0.85rem;
+  font-size: 0.82rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.preset-chip:hover {
+  border-color: var(--accent-cyan);
+  color: #ffffff;
+  background: rgba(0, 242, 254, 0.08);
+}
+
+.preset-chip.active {
+  border-color: var(--accent-cyan);
+  background: rgba(0, 242, 254, 0.16);
+  color: var(--accent-cyan);
+  font-weight: 700;
+  box-shadow: 0 0 10px rgba(0, 242, 254, 0.2);
+}
+
+.visual-bar-card {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+}
+
+.bar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.86rem;
+  font-weight: 700;
+  margin-bottom: 0.65rem;
+}
+
+.segmented-ratio-bar {
+  display: flex;
+  width: 100%;
+  height: 32px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.bar-segment {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.bar-easy {
+  background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.bar-medium {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.bar-hard {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+}
+
+.ratio-sliders-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+}
+
+.slider-box {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  transition: border-color 0.2s ease;
+}
+
+.slider-box.box-easy {
+  border-top: 3px solid #10b981;
+}
+
+.slider-box.box-medium {
+  border-top: 3px solid #f59e0b;
+}
+
+.slider-box.box-hard {
+  border-top: 3px solid #ef4444;
+}
+
+.slider-box-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.diff-badge {
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.badge-easy {
+  color: #34d399;
+}
+
+.badge-medium {
+  color: #fbbf24;
+}
+
+.badge-hard {
+  color: #f87171;
+}
+
+.input-with-pct {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.pct-input {
+  width: 68px;
+  text-align: right;
+  font-weight: 800;
+  font-size: 1rem;
+}
+
+.pct-unit {
+  font-weight: 800;
+  color: var(--text-muted);
+}
+
+.slider-desc {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.35;
+  min-height: 2.2rem;
+}
+
+.range-slider {
+  width: 100%;
+  cursor: pointer;
+  height: 6px;
+  border-radius: 3px;
+  outline: none;
+}
+
+.range-easy {
+  accent-color: #10b981;
+}
+
+.range-medium {
+  accent-color: #f59e0b;
+}
+
+.range-hard {
+  accent-color: #ef4444;
+}
+
+.progression-box {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+
+.progression-title {
+  display: block;
+  font-size: 0.92rem;
+  font-weight: 800;
+  margin-bottom: 0.85rem;
+  color: #ffffff;
+}
+
+.progression-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.progression-radio {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.progression-radio input {
+  margin-top: 0.2rem;
+}
+
+.progression-radio:hover {
+  border-color: rgba(0, 242, 254, 0.4);
+}
+
+.progression-radio.selected {
+  border-color: var(--accent-cyan);
+  background: rgba(0, 242, 254, 0.06);
+}
+
+.radio-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.radio-content strong {
+  font-size: 0.88rem;
+  color: #ffffff;
+}
+
+.radio-content span {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.preview-section {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 1.25rem;
+}
+
+.preview-header {
+  margin-bottom: 1rem;
+}
+
+.preview-header h3 {
+  font-size: 0.98rem;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.preview-sub {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.preview-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.preview-table th,
+.preview-table td {
+  padding: 0.75rem 1rem;
+  text-align: center;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.88rem;
+}
+
+.preview-table th {
+  background: rgba(255, 255, 255, 0.04);
+  font-weight: 800;
+  color: var(--text-muted);
+}
+
+.preview-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.col-easy {
+  color: #34d399;
+}
+
+.col-medium {
+  color: #fbbf24;
+}
+
+.col-hard {
+  color: #f87171;
+}
+
+.text-bold {
+  font-weight: 800;
+}
+
+.panel-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.btn-large {
+  padding: 0.75rem 1.75rem;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+@media (max-width: 900px) {
+  .ratio-sliders-grid,
+  .progression-options {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 900px) {

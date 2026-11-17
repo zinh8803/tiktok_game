@@ -325,5 +325,27 @@ export class ApiController {
     this.db.deleteGiftMapping(id);
     return this.gameEngine.broadcastGiftsUpdated();
   }
+
+  // =====================================================================
+  // SYSTEM SETTINGS & DIFFICULTY RATIO
+  // =====================================================================
+
+  @Get('settings/ratio')
+  getQuestionRatio() {
+    return this.db.getQuestionRatioConfig();
+  }
+
+  @Put('settings/ratio')
+  updateQuestionRatio(@Body() body: any) {
+    try {
+      const updated = this.db.setQuestionRatioConfig(body);
+      return updated;
+    } catch (err: any) {
+      throw new HttpException(
+        err.message || 'Lỗi lưu cấu hình tỉ lệ câu hỏi',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
 }
 

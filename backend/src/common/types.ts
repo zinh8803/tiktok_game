@@ -130,3 +130,11 @@ export interface LeaderboardEntry {
   bestStreak: number;
   lastQuestionDelta?: number;
 }
+
+export interface QuestionRatioSettings {
+  easyPercent: number;
+  mediumPercent: number;
+  hardPercent: number;
+  progressionOrder: 'PROGRESSIVE' | 'SHUFFLED';
+}
+

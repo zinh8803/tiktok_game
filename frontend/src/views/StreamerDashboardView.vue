@@ -136,23 +136,214 @@
             <div class="form-field">
               <label>Độ khó</label>
               <select v-model="configForm.difficulty" class="select-control">
-                <option value="ALL">Hỗn hợp (Đủ mọi mức độ)</option>
+                <option value="ALL">Hỗn hợp ({{ ratioConfig.easyPercent }}% Dễ - {{ ratioConfig.mediumPercent }}% TB - {{ ratioConfig.hardPercent }}% Khó)</option>
                 <option value="EASY">Dễ (Khởi động)</option>
                 <option value="MEDIUM">Trung bình</option>
                 <option value="HARD">Khó (Thử thách)</option>
               </select>
             </div>
 
+            <!-- KHU VỰC CHỈNH TỈ LỆ DỄ / TRUNG BÌNH / KHÓ NGAY TRÊN DASHBOARD -->
+            <div v-if="configForm.difficulty === 'ALL'" class="form-field full-span ratio-dashboard-panel">
+              <div class="rd-header">
+                <div class="rd-title">
+                  <Sliders :size="16" class="text-cyan" />
+                  <strong>Tùy Chỉnh Tỉ Lệ Độ Khó (Đang áp dụng cho chế độ Hỗ Hợp)</strong>
+                </div>
+                <div class="rd-actions-top">
+                  <span class="rd-sum-badge" :class="totalRatioPercent === 100 ? 'badge-emerald' : 'badge-gold'">
+                    Tổng: {{ totalRatioPercent }}%
+                  </span>
+                  <button
+                    type="button"
+                    class="btn-text-toggle"
+                    @click="showRatioCustomizer = !showRatioCustomizer"
+                  >
+                    {{ showRatioCustomizer ? 'Thu gọn ▲' : 'Chỉnh sửa tỉ lệ ▼' }}
+                  </button>
+                </div>
+              </div>
+
+              <div v-show="showRatioCustomizer" class="rd-body">
+                <!-- PRESET CHIPS -->
+                <div class="rd-presets-row">
+                  <span class="rd-preset-label">Mẫu nhanh:</span>
+                  <button
+                    type="button"
+                    class="rd-preset-chip"
+                    :class="{ active: isDashPreset(40, 40, 20) }"
+                    @click="applyDashPreset(40, 40, 20)"
+                  >
+                    🎯 Chuẩn 4:4:2
+                  </button>
+                  <button
+                    type="button"
+                    class="rd-preset-chip"
+                    :class="{ active: isDashPreset(50, 30, 20) }"
+                    @click="applyDashPreset(50, 30, 20)"
+                  >
+                    🌟 Thân thiện 5:3:2
+                  </button>
+                  <button
+                    type="button"
+                    class="rd-preset-chip"
+                    :class="{ active: isDashPreset(34, 33, 33) }"
+                    @click="applyDashPreset(34, 33, 33)"
+                  >
+                    ⚖️ Cân bằng đều
+                  </button>
+                  <button
+                    type="button"
+                    class="rd-preset-chip"
+                    :class="{ active: isDashPreset(20, 40, 40) }"
+                    @click="applyDashPreset(20, 40, 40)"
+                  >
+                    🔥 Gay cấn 2:4:4
+                  </button>
+                  <button
+                    type="button"
+                    class="rd-preset-chip"
+                    :class="{ active: isDashPreset(10, 30, 60) }"
+                    @click="applyDashPreset(10, 30, 60)"
+                  >
+                    💀 Siêu khó 1:3:6
+                  </button>
+                </div>
+
+                <!-- 3 SLIDERS -->
+                <div class="rd-sliders-grid">
+                  <!-- EASY -->
+                  <div class="rd-slider-box rd-easy">
+                    <div class="rd-slider-head">
+                      <span class="rd-badge-easy">🟢 Dễ (EASY)</span>
+                      <div class="rd-input-wrap">
+                        <input
+                          v-model.number="ratioConfig.easyPercent"
+                          type="number"
+                          min="0"
+                          max="100"
+                          class="rd-input"
+                          @input="clampDashRatio"
+                        />
+                        <span>%</span>
+                      </div>
+                    </div>
+                    <input
+                      v-model.number="ratioConfig.easyPercent"
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="5"
+                      class="rd-range range-easy"
+                      @input="clampDashRatio"
+                    />
+                  </div>
+
+                  <!-- MEDIUM -->
+                  <div class="rd-slider-box rd-medium">
+                    <div class="rd-slider-head">
+                      <span class="rd-badge-medium">🟡 TB (MEDIUM)</span>
+                      <div class="rd-input-wrap">
+                        <input
+                          v-model.number="ratioConfig.mediumPercent"
+                          type="number"
+                          min="0"
+                          max="100"
+                          class="rd-input"
+                          @input="clampDashRatio"
+                        />
+                        <span>%</span>
+                      </div>
+                    </div>
+                    <input
+                      v-model.number="ratioConfig.mediumPercent"
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="5"
+                      class="rd-range range-medium"
+                      @input="clampDashRatio"
+                    />
+                  </div>
+
+                  <!-- HARD -->
+                  <div class="rd-slider-box rd-hard">
+                    <div class="rd-slider-head">
+                      <span class="rd-badge-hard">🔴 Khó (HARD)</span>
+                      <div class="rd-input-wrap">
+                        <input
+                          v-model.number="ratioConfig.hardPercent"
+                          type="number"
+                          min="0"
+                          max="100"
+                          class="rd-input"
+                          @input="clampDashRatio"
+                        />
+                        <span>%</span>
+                      </div>
+                    </div>
+                    <input
+                      v-model.number="ratioConfig.hardPercent"
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="5"
+                      class="rd-range range-hard"
+                      @input="clampDashRatio"
+                    />
+                  </div>
+                </div>
+
+                <!-- PROGRESS BAR -->
+                <div class="rd-bar">
+                  <div class="rd-bar-seg bg-easy" :style="{ width: ratioBarPercent.easy + '%' }" title="Dễ">
+                    <span v-if="ratioBarPercent.easy >= 15">{{ ratioConfig.easyPercent }}% Dễ</span>
+                  </div>
+                  <div class="rd-bar-seg bg-med" :style="{ width: ratioBarPercent.medium + '%' }" title="Trung bình">
+                    <span v-if="ratioBarPercent.medium >= 15">{{ ratioConfig.mediumPercent }}% TB</span>
+                  </div>
+                  <div class="rd-bar-seg bg-hard" :style="{ width: ratioBarPercent.hard + '%' }" title="Khó">
+                    <span v-if="ratioBarPercent.hard >= 15">{{ ratioConfig.hardPercent }}% Khó</span>
+                  </div>
+                </div>
+
+                <!-- PROGRESSION ORDER & ACTIONS -->
+                <div class="rd-bottom-row">
+                  <div class="rd-order-wrap">
+                    <span class="rd-order-label">Thứ tự ra đề:</span>
+                    <label class="rd-radio-label" :class="{ active: ratioConfig.progressionOrder === 'PROGRESSIVE' }">
+                      <input v-model="ratioConfig.progressionOrder" type="radio" value="PROGRESSIVE" />
+                      <span>🚀 Lũy tiến (Dễ ➔ TB ➔ Khó)</span>
+                    </label>
+                    <label class="rd-radio-label" :class="{ active: ratioConfig.progressionOrder === 'SHUFFLED' }">
+                      <input v-model="ratioConfig.progressionOrder" type="radio" value="SHUFFLED" />
+                      <span>🎲 Xáo trộn ngẫu nhiên</span>
+                    </label>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-cyan btn-sm"
+                    :disabled="isSavingRatio"
+                    @click="saveRatioFromDashboard"
+                  >
+                    <Save :size="14" />
+                    <span>{{ isSavingRatio ? 'Đang lưu...' : 'Lưu Tỉ Lệ Này' }}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <div class="form-field">
               <label>Số lượng câu hỏi / trận</label>
               <select v-model.number="configForm.questionCount" class="select-control tabular-nums">
-                <option :value="5">5 câu hỏi (Nhanh)</option>
-                <option :value="10">10 câu hỏi (Tiêu chuẩn)</option>
-                <option :value="15">15 câu hỏi</option>
-                <option :value="20">20 câu hỏi (Marathon)</option>
-                <option :value="30">30 câu hỏi</option>
-                <option :value="50">50 câu hỏi</option>
-                <option :value="100">100 câu hỏi</option>
+                <option :value="5">5 câu hỏi (Nhanh{{ getRatioBreakdownText(5) }})</option>
+                <option :value="10">10 câu hỏi (Tiêu chuẩn{{ getRatioBreakdownText(10) }})</option>
+                <option :value="15">15 câu hỏi{{ getRatioBreakdownText(15) }}</option>
+                <option :value="20">20 câu hỏi (Marathon{{ getRatioBreakdownText(20) }})</option>
+                <option :value="30">30 câu hỏi{{ getRatioBreakdownText(30) }}</option>
+                <option :value="40">40 câu hỏi{{ getRatioBreakdownText(40) }}</option>
+                <option :value="50">50 câu hỏi{{ getRatioBreakdownText(50) }}</option>
+                <option :value="100">100 câu hỏi{{ getRatioBreakdownText(100) }}</option>
                 <option :value="0">🔥 Chạy hết TẤT CẢ câu hỏi ({{ stats.publishedQuestions || 'Toàn bộ' }} câu)</option>
               </select>
             </div>
@@ -831,6 +1022,7 @@ import {
   Plug,
   Power,
   Settings,
+  Sliders,
   Save,
   Monitor,
   Copy,
@@ -879,6 +1071,93 @@ const configForm = reactive({
   timePerQuestion: 25,
   autoAdvance: true,
 });
+
+const ratioConfig = reactive({
+  easyPercent: 40,
+  mediumPercent: 40,
+  hardPercent: 20,
+  progressionOrder: 'PROGRESSIVE' as 'PROGRESSIVE' | 'SHUFFLED',
+});
+
+const showRatioCustomizer = ref(true);
+const isSavingRatio = ref(false);
+
+const totalRatioPercent = computed(() => {
+  return (
+    Number(ratioConfig.easyPercent || 0) +
+    Number(ratioConfig.mediumPercent || 0) +
+    Number(ratioConfig.hardPercent || 0)
+  );
+});
+
+const ratioBarPercent = computed(() => {
+  const sum = totalRatioPercent.value || 100;
+  return {
+    easy: Math.round(((Number(ratioConfig.easyPercent) || 0) / sum) * 100),
+    medium: Math.round(((Number(ratioConfig.mediumPercent) || 0) / sum) * 100),
+    hard: Math.round(((Number(ratioConfig.hardPercent) || 0) / sum) * 100),
+  };
+});
+
+function clampDashRatio() {
+  if (ratioConfig.easyPercent < 0) ratioConfig.easyPercent = 0;
+  if (ratioConfig.mediumPercent < 0) ratioConfig.mediumPercent = 0;
+  if (ratioConfig.hardPercent < 0) ratioConfig.hardPercent = 0;
+  if (ratioConfig.easyPercent > 100) ratioConfig.easyPercent = 100;
+  if (ratioConfig.mediumPercent > 100) ratioConfig.mediumPercent = 100;
+  if (ratioConfig.hardPercent > 100) ratioConfig.hardPercent = 100;
+}
+
+function applyDashPreset(easy: number, med: number, hard: number) {
+  ratioConfig.easyPercent = easy;
+  ratioConfig.mediumPercent = med;
+  ratioConfig.hardPercent = hard;
+}
+
+function isDashPreset(easy: number, med: number, hard: number) {
+  return (
+    Number(ratioConfig.easyPercent) === easy &&
+    Number(ratioConfig.mediumPercent) === med &&
+    Number(ratioConfig.hardPercent) === hard
+  );
+}
+
+async function saveRatioFromDashboard() {
+  isSavingRatio.value = true;
+  try {
+    const res = await api.updateRatioSettings({
+      easyPercent: Number(ratioConfig.easyPercent) || 0,
+      mediumPercent: Number(ratioConfig.mediumPercent) || 0,
+      hardPercent: Number(ratioConfig.hardPercent) || 0,
+      progressionOrder: ratioConfig.progressionOrder,
+    });
+    ratioConfig.easyPercent = res.easyPercent;
+    ratioConfig.mediumPercent = res.mediumPercent;
+    ratioConfig.hardPercent = res.hardPercent;
+    ratioConfig.progressionOrder = res.progressionOrder;
+    showToast(
+      `Đã lưu tỉ lệ độ khó: ${res.easyPercent}% Dễ - ${res.mediumPercent}% TB - ${res.hardPercent}% Khó!`,
+      'success'
+    );
+  } catch (err: any) {
+    showToast(`Lỗi lưu tỉ lệ: ${err.message}`, 'error');
+  } finally {
+    isSavingRatio.value = false;
+  }
+}
+
+function getRatioBreakdownText(total: number) {
+  if (configForm.difficulty !== 'ALL') return '';
+  const sum =
+    (Number(ratioConfig.easyPercent) || 0) +
+    (Number(ratioConfig.mediumPercent) || 0) +
+    (Number(ratioConfig.hardPercent) || 0) ||
+    100;
+  const easy = Math.round(total * ((Number(ratioConfig.easyPercent) || 0) / sum));
+  const med = Math.round(total * ((Number(ratioConfig.mediumPercent) || 0) / sum));
+  const hard = Math.max(0, total - easy - med);
+  return `: ${easy} Dễ - ${med} TB - ${hard} Khó`;
+}
 
 const simUser = reactive({
   nickname: 'Minh Anh 🌸',
@@ -1129,16 +1408,24 @@ function formatConnectionState(state: string) {
 
 async function loadDashboardData() {
   try {
-    const [healthRes, roomRes, catRes, giftRes] = await Promise.all([
+    const [healthRes, roomRes, catRes, giftRes, ratioRes] = await Promise.all([
       api.getHealth(),
       api.getRoom(roomCode.value),
       api.getCategories(),
       api.getGifts(),
+      api.getRatioSettings(),
     ]);
 
     stats.value = healthRes.stats || {};
     categories.value = catRes || [];
     gifts.value = giftRes || [];
+
+    if (ratioRes) {
+      ratioConfig.easyPercent = ratioRes.easyPercent;
+      ratioConfig.mediumPercent = ratioRes.mediumPercent;
+      ratioConfig.hardPercent = ratioRes.hardPercent;
+      ratioConfig.progressionOrder = ratioRes.progressionOrder || 'PROGRESSIVE';
+    }
 
     if (roomRes.roomState) {
       roomState.value = roomRes.roomState;
@@ -1200,11 +1487,19 @@ async function handleDisconnectTikTok() {
 
 async function saveConfig() {
   try {
-    await api.updateRoomConfig(roomCode.value, {
-      ...configForm,
-      tiktokUsername: tiktokUsernameInput.value.trim().replace(/^@/, ''),
-    });
-    showToast('Đã lưu cấu hình phòng chơi thành công!', 'success');
+    await Promise.all([
+      api.updateRoomConfig(roomCode.value, {
+        ...configForm,
+        tiktokUsername: tiktokUsernameInput.value.trim().replace(/^@/, ''),
+      }),
+      api.updateRatioSettings({
+        easyPercent: Number(ratioConfig.easyPercent) || 0,
+        mediumPercent: Number(ratioConfig.mediumPercent) || 0,
+        hardPercent: Number(ratioConfig.hardPercent) || 0,
+        progressionOrder: ratioConfig.progressionOrder,
+      }),
+    ]);
+    showToast('Đã lưu cấu hình phòng & tỉ lệ ra câu hỏi thành công!', 'success');
   } catch (err: any) {
     showToast(err.message, 'error');
   }
@@ -1798,6 +2093,267 @@ onBeforeUnmount(() => {
 }
 .icon-purple {
   color: var(--accent-purple-bright);
+}
+
+/* =====================================================================
+   DASHBOARD RATIO CUSTOMIZER PANEL
+   ===================================================================== */
+.ratio-dashboard-panel {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(0, 242, 254, 0.25);
+  border-radius: 12px;
+  padding: 1rem 1.15rem;
+  margin-top: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.rd-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.rd-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.92rem;
+  color: #ffffff;
+}
+
+.rd-actions-top {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.rd-sum-badge {
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+}
+
+.btn-text-toggle {
+  background: none;
+  border: none;
+  color: var(--accent-cyan);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  transition: opacity 0.2s ease;
+}
+
+.btn-text-toggle:hover {
+  text-decoration: underline;
+}
+
+.rd-body {
+  margin-top: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 0.85rem;
+}
+
+.rd-presets-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.rd-preset-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.rd-preset-chip {
+  padding: 0.25rem 0.65rem;
+  font-size: 0.76rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.rd-preset-chip:hover {
+  border-color: var(--accent-cyan);
+  color: #ffffff;
+  background: rgba(0, 242, 254, 0.08);
+}
+
+.rd-preset-chip.active {
+  border-color: var(--accent-cyan);
+  background: rgba(0, 242, 254, 0.18);
+  color: var(--accent-cyan);
+  font-weight: 700;
+}
+
+.rd-sliders-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+}
+
+.rd-slider-box {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.rd-slider-box.rd-easy {
+  border-top: 2px solid #10b981;
+}
+
+.rd-slider-box.rd-medium {
+  border-top: 2px solid #f59e0b;
+}
+
+.rd-slider-box.rd-hard {
+  border-top: 2px solid #ef4444;
+}
+
+.rd-slider-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.rd-badge-easy {
+  color: #34d399;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.rd-badge-medium {
+  color: #fbbf24;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.rd-badge-hard {
+  color: #f87171;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.rd-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.rd-input {
+  width: 48px;
+  padding: 0.2rem 0.35rem;
+  text-align: right;
+  font-weight: 800;
+  font-size: 0.88rem;
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+  background: rgba(0, 0, 0, 0.3);
+  color: #ffffff;
+}
+
+.rd-range {
+  width: 100%;
+  cursor: pointer;
+  height: 5px;
+  border-radius: 3px;
+}
+
+.rd-bar {
+  display: flex;
+  width: 100%;
+  height: 24px;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.rd-bar-seg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.bg-easy {
+  background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.bg-med {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.bg-hard {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+}
+
+.rd-bottom-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.rd-order-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.rd-order-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.rd-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.rd-radio-label.active {
+  color: #ffffff;
+  border-color: rgba(0, 242, 254, 0.4);
+  background: rgba(0, 242, 254, 0.08);
+}
+
+@media (max-width: 900px) {
+  .rd-sliders-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 768px) {
