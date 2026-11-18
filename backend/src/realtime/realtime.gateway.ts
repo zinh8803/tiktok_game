@@ -36,6 +36,17 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       bgmVolume?: number;
       sfxVolume?: number;
       lofiStyle?: string;
+      avatarSize?: number;
+      stageCalib?: {
+        preset: string;
+        maxWidth: number;
+        scale: number;
+        offsetX: number;
+        offsetY: number;
+        paddingTop: number;
+        paddingBottom: number;
+        avatarSize: number;
+      };
     }
   >();
 
@@ -133,6 +144,17 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       bgmVolume?: number;
       sfxVolume?: number;
       lofiStyle?: string;
+      avatarSize?: number;
+      stageCalib?: {
+        preset?: string;
+        maxWidth?: number;
+        scale?: number;
+        offsetX?: number;
+        offsetY?: number;
+        paddingTop?: number;
+        paddingBottom?: number;
+        avatarSize?: number;
+      };
     }
   ) {
     const roomCode = (payload?.roomCode || 'KB2026').toUpperCase();
@@ -151,7 +173,24 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       bgmVolume: 40,
       sfxVolume: 80,
       lofiStyle: 'chill-cafe',
+      avatarSize: 34,
     };
+    const nextAvatarSize = Number(
+      payload.avatarSize ?? payload.stageCalib?.avatarSize ?? current.avatarSize ?? 34
+    );
+    const updatedStageCalib = payload.stageCalib
+      ? {
+          preset: String(payload.stageCalib.preset || current.stageCalib?.preset || 'fullscreen'),
+          maxWidth: Number(payload.stageCalib.maxWidth ?? current.stageCalib?.maxWidth ?? 760),
+          scale: Number(payload.stageCalib.scale ?? current.stageCalib?.scale ?? 100),
+          offsetX: Number(payload.stageCalib.offsetX ?? current.stageCalib?.offsetX ?? 0),
+          offsetY: Number(payload.stageCalib.offsetY ?? current.stageCalib?.offsetY ?? 0),
+          paddingTop: Number(payload.stageCalib.paddingTop ?? current.stageCalib?.paddingTop ?? 20),
+          paddingBottom: Number(payload.stageCalib.paddingBottom ?? current.stageCalib?.paddingBottom ?? 24),
+          avatarSize: nextAvatarSize,
+        }
+      : current.stageCalib;
+
     const updated = {
       frameWidth: Number(payload.frameWidth ?? current.frameWidth),
       frameHeight: Number(payload.frameHeight ?? current.frameHeight),
@@ -167,6 +206,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       bgmVolume: payload.bgmVolume !== undefined ? Number(payload.bgmVolume) : (current.bgmVolume ?? 40),
       sfxVolume: payload.sfxVolume !== undefined ? Number(payload.sfxVolume) : (current.sfxVolume ?? 80),
       lofiStyle: payload.lofiStyle || current.lofiStyle || 'chill-cafe',
+      avatarSize: nextAvatarSize,
+      stageCalib: updatedStageCalib,
     };
     this.roomLayoutConfigs.set(roomCode, updated);
     this.emitToRoom(roomCode, 'layout.config', updated);

@@ -4,6 +4,7 @@ import { GameEngineService } from '../game-engine/game-engine.service';
 import { EventProcessorService } from '../event-processor/event-processor.service';
 import { TikTokService } from '../integrations/tiktok/tiktok.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
+import { TugOfWarService } from '../tug-of-war/tug-of-war.service';
 
 async function runVerificationChecklist() {
   console.log('=== KNOWLEDGE BATTLE - KIỂM THỬ NGHIỆP VỤ THEO CHECKLIST MỤC 10.1 ===');
@@ -19,7 +20,7 @@ async function runVerificationChecklist() {
   db.initDatabase();
 
   const gameEngine = new GameEngineService(db, mockGateway);
-  const eventProcessor = new EventProcessorService(db, gameEngine);
+  const eventProcessor = new EventProcessorService(db, gameEngine, new TugOfWarService(db, mockGateway));
   const tiktokService = new TikTokService(eventProcessor, mockGateway);
 
   const roomCode = 'KB2026';

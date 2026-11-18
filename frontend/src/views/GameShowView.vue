@@ -243,7 +243,7 @@
         </div>
 
         <!-- Safe zone sliders for TikTok Live (160px top, 262px bottom) -->
-        <div v-if="layoutCalib.preset === 'tiktok-safe-zone'" class="calib-slider-group">
+        <div class="calib-slider-group">
           <label>
             <span>Né trên (Avatar & BXH)</span>
             <strong>{{ layoutCalib.paddingTop }}px</strong>
@@ -254,11 +254,11 @@
             min="0"
             max="350"
             step="2"
-            @input="onManualCalibChange"
+            @input="onPaddingCalibChange"
           />
         </div>
 
-        <div v-if="layoutCalib.preset === 'tiktok-safe-zone'" class="calib-slider-group">
+        <div class="calib-slider-group">
           <label>
             <span>Né dưới (Khung Chat & Quà)</span>
             <strong>{{ layoutCalib.paddingBottom }}px</strong>
@@ -269,12 +269,12 @@
             min="0"
             max="450"
             step="2"
-            @input="onManualCalibChange"
+            @input="onPaddingCalibChange"
           />
         </div>
 
-        <!-- Width / Height sliders for 362x444 or custom -->
-        <div v-if="layoutCalib.preset === '362x444' || layoutCalib.preset === 'custom'" class="calib-slider-group">
+        <!-- Width / Height sliders -->
+        <div class="calib-slider-group">
           <label>
             <span>Chiều rộng khung (px)</span>
             <strong>{{ layoutCalib.frameWidth }}px</strong>
@@ -283,13 +283,13 @@
             v-model.number="layoutCalib.frameWidth"
             type="range"
             min="260"
-            max="1080"
+            max="1400"
             step="4"
-            @input="onManualCalibChange"
+            @input="onDimensionCalibChange"
           />
         </div>
 
-        <div v-if="layoutCalib.preset === '362x444' || layoutCalib.preset === 'custom'" class="calib-slider-group">
+        <div class="calib-slider-group">
           <label>
             <span>Chiều cao khung (px)</span>
             <strong>{{ layoutCalib.frameHeight }}px</strong>
@@ -300,7 +300,7 @@
             min="320"
             max="1920"
             step="4"
-            @input="onManualCalibChange"
+            @input="onDimensionCalibChange"
           />
         </div>
 
@@ -316,7 +316,7 @@
             min="50"
             max="150"
             step="1"
-            @input="onManualCalibChange"
+            @input="onTransformCalibChange"
           />
         </div>
 
@@ -331,7 +331,7 @@
             min="-35"
             max="35"
             step="1"
-            @input="onManualCalibChange"
+            @input="onTransformCalibChange"
           />
         </div>
 
@@ -343,10 +343,10 @@
           <input
             v-model.number="layoutCalib.offsetX"
             type="range"
-            min="-30"
-            max="30"
+            min="-35"
+            max="35"
             step="1"
-            @input="onManualCalibChange"
+            @input="onTransformCalibChange"
           />
         </div>
       </div>
@@ -360,6 +360,8 @@
         'frame-fullscreen': layoutCalib.preset === 'fullscreen',
         'frame-safe-zone': layoutCalib.preset === 'tiktok-safe-zone',
         'frame-box-362x444': layoutCalib.preset === '362x444',
+        'frame-custom': layoutCalib.preset === 'custom',
+        'frame-narrow': (layoutCalib.preset === '362x444' || layoutCalib.preset === 'custom') && layoutCalib.frameWidth < 740,
       }"
       :style="broadcastFrameStyle"
     >
@@ -952,8 +954,19 @@ function applyCalibPreset(preset: 'fullscreen' | 'tiktok-safe-zone' | '362x444')
   saveAndBroadcastCalib();
 }
 
-function onManualCalibChange() {
+function onDimensionCalibChange() {
   layoutCalib.value.preset = 'custom';
+  saveAndBroadcastCalib();
+}
+
+function onPaddingCalibChange() {
+  if (layoutCalib.value.preset === 'fullscreen') {
+    layoutCalib.value.preset = 'tiktok-safe-zone';
+  }
+  saveAndBroadcastCalib();
+}
+
+function onTransformCalibChange() {
   saveAndBroadcastCalib();
 }
 
@@ -997,16 +1010,10 @@ const broadcastFrameStyle = computed(() => {
       ? `translate(${ox}vw, ${oy}vh) scale(${effectiveScale.toFixed(3)})`
       : undefined;
 
-  if (!isVerticalLayout.value) {
-    if (!transform) return {};
-    return {
-      transform,
-      transformOrigin: 'center center',
-    };
-  }
-
-  // --- Chế độ dọc TikTok LIVE ---
   if (layoutCalib.value.preset === 'fullscreen') {
+    if (!isVerticalLayout.value) {
+      return transform ? { transform, transformOrigin: 'center center' } : {};
+    }
     return {
       width: '100%',
       maxWidth: '100%',
@@ -1024,7 +1031,7 @@ const broadcastFrameStyle = computed(() => {
     const bottomPad = layoutCalib.value.paddingBottom ?? 262;
     return {
       width: '100%',
-      maxWidth: '100%',
+      maxWidth: isVerticalLayout.value ? '100%' : '1360px',
       height: '100%',
       maxHeight: '100%',
       paddingTop: `${topPad}px`,
@@ -1037,13 +1044,19 @@ const broadcastFrameStyle = computed(() => {
     };
   }
 
-  // Khung 362x444 hoặc custom
+  // Khung 362x444 hoặc custom (áp dụng cho cả màn hình Ngang lẫn Dọc)
   const fw = layoutCalib.value.frameWidth || 362;
   const fh = layoutCalib.value.frameHeight || 444;
   return {
     width: `${fw}px`,
     maxWidth: '98vw',
-    maxHeight: `${fh}px`,
+    height: `${fh}px`,
+    maxHeight: '96vh',
+    overflowY: 'auto' as const,
+    margin: 'auto',
+    paddingTop: layoutCalib.value.paddingTop ? `${layoutCalib.value.paddingTop}px` : undefined,
+    paddingBottom: layoutCalib.value.paddingBottom ? `${layoutCalib.value.paddingBottom}px` : undefined,
+    boxSizing: 'border-box' as const,
     transform,
     transformOrigin: 'center center',
   };
@@ -1732,11 +1745,8 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 
-.layout-vertical .broadcast-frame.frame-box-362x444 {
-  width: 362px !important;
-  max-width: 98vw !important;
-  max-height: 444px !important;
-  height: auto !important;
+.broadcast-frame.frame-box-362x444,
+.broadcast-frame.frame-custom {
   margin: auto;
   justify-content: center;
   gap: 6px;
@@ -1771,7 +1781,10 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 
-.layout-vertical .broadcast-frame.frame-box-362x444 .stage-grid {
+.broadcast-frame.frame-box-362x444 .stage-grid,
+.broadcast-frame.frame-custom.frame-narrow .stage-grid,
+.layout-vertical .broadcast-frame.frame-box-362x444 .stage-grid,
+.layout-vertical .broadcast-frame.frame-custom.frame-narrow .stage-grid {
   flex: initial;
   display: grid;
   grid-template-columns: 1fr;
@@ -1788,7 +1801,10 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 
-.layout-vertical .broadcast-frame.frame-box-362x444 .center-stage-area {
+.broadcast-frame.frame-box-362x444 .center-stage-area,
+.broadcast-frame.frame-custom.frame-narrow .center-stage-area,
+.layout-vertical .broadcast-frame.frame-box-362x444 .center-stage-area,
+.layout-vertical .broadcast-frame.frame-custom.frame-narrow .center-stage-area {
   padding: 10px 12px;
   border-radius: 10px;
 }
@@ -2110,6 +2126,8 @@ onBeforeUnmount(() => {
 
 .calib-popup-card {
   width: min(340px, 94vw);
+  max-height: calc(100vh - 4rem);
+  overflow-y: auto;
   padding: 0.9rem;
   border-radius: 0.9rem;
   background: rgba(10, 14, 34, 0.96);

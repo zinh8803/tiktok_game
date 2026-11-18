@@ -11,6 +11,9 @@
       </div>
 
       <nav class="topbar-actions">
+        <router-link to="/" class="btn btn-secondary">
+          <span>🏠 Trang chủ Game</span>
+        </router-link>
         <router-link to="/admin" class="btn btn-secondary">
           <Database :size="17" />
           <span>Ngân Hàng Câu Hỏi ({{ stats.publishedQuestions || 20 }})</span>
@@ -456,7 +459,7 @@
                   v-model.number="dashLayoutCalib.frameWidth"
                   type="range"
                   min="260"
-                  max="640"
+                  max="1400"
                   step="2"
                   style="width: 100%; accent-color: var(--accent-cyan); cursor: pointer;"
                   @input="emitDashLayoutChange"
@@ -472,7 +475,7 @@
                   v-model.number="dashLayoutCalib.frameHeight"
                   type="range"
                   min="320"
-                  max="840"
+                  max="1920"
                   step="2"
                   style="width: 100%; accent-color: var(--accent-cyan); cursor: pointer;"
                   @input="emitDashLayoutChange"
@@ -488,10 +491,10 @@
                   v-model.number="dashLayoutCalib.scale"
                   type="range"
                   min="50"
-                  max="130"
+                  max="150"
                   step="1"
                   style="width: 100%; accent-color: var(--accent-cyan); cursor: pointer;"
-                  @input="emitDashLayoutChange"
+                  @input="broadcastDashCalib"
                 />
               </div>
 
@@ -507,7 +510,7 @@
                   max="35"
                   step="1"
                   style="width: 100%; accent-color: var(--accent-cyan); cursor: pointer;"
-                  @input="emitDashLayoutChange"
+                  @input="broadcastDashCalib"
                 />
               </div>
             </div>

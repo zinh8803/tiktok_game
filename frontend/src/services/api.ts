@@ -121,5 +121,39 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+
+  // ===== Game: Kéo Co Tri Thức =====
+  tugState: (roomCode = 'KB2026') => request<any>(`/tug/${roomCode}/state`),
+  tugConfig: (roomCode: string, payload: any) =>
+    request<any>(`/tug/${roomCode}/config`, { method: 'PUT', body: JSON.stringify(payload) }),
+  tugLobby: (roomCode = 'KB2026') => request<any>(`/tug/${roomCode}/lobby`, { method: 'POST' }),
+  tugStart: (roomCode = 'KB2026') => request<any>(`/tug/${roomCode}/start`, { method: 'POST' }),
+  tugNext: (roomCode = 'KB2026') => request<any>(`/tug/${roomCode}/next`, { method: 'POST' }),
+  tugFinish: (roomCode = 'KB2026') => request<any>(`/tug/${roomCode}/finish`, { method: 'POST' }),
+  tugStop: (roomCode = 'KB2026') => request<any>(`/tug/${roomCode}/stop`, { method: 'POST' }),
+  tugSimulate: (roomCode: string, payload: { kind: string; coins?: number; team?: string; count?: number }) =>
+    request<any>(`/tug/${roomCode}/simulate`, { method: 'POST', body: JSON.stringify(payload) }),
+
+  // ===== Game: Đuổi Hình Bắt Chữ =====
+  catchwordState: (roomCode = 'KB2026', withSecret = false) =>
+    request<any>(`/catchword/${roomCode}/state${withSecret ? '?secret=1' : ''}`),
+  catchwordConfig: (roomCode: string, payload: any) =>
+    request<any>(`/catchword/${roomCode}/config`, { method: 'PUT', body: JSON.stringify(payload) }),
+  catchwordAddPuzzle: (payload: any) =>
+    request<any>('/catchword/puzzles', { method: 'POST', body: JSON.stringify(payload) }),
+  catchwordLobby: (roomCode = 'KB2026') => request<any>(`/catchword/${roomCode}/lobby`, { method: 'POST' }),
+  catchwordStart: (roomCode = 'KB2026') => request<any>(`/catchword/${roomCode}/start`, { method: 'POST' }),
+  catchwordNext: (roomCode = 'KB2026') => request<any>(`/catchword/${roomCode}/next`, { method: 'POST' }),
+  catchwordRevealLetter: (roomCode = 'KB2026', count = 1) =>
+    request<any>(`/catchword/${roomCode}/reveal-letter`, {
+      method: 'POST',
+      body: JSON.stringify({ count }),
+    }),
+  catchwordUnlockHint: (roomCode = 'KB2026') =>
+    request<any>(`/catchword/${roomCode}/unlock-hint`, { method: 'POST' }),
+  catchwordFinish: (roomCode = 'KB2026') => request<any>(`/catchword/${roomCode}/finish`, { method: 'POST' }),
+  catchwordStop: (roomCode = 'KB2026') => request<any>(`/catchword/${roomCode}/stop`, { method: 'POST' }),
+  catchwordSimulate: (roomCode: string, payload: { kind: string; coins?: number; count?: number }) =>
+    request<any>(`/catchword/${roomCode}/simulate`, { method: 'POST', body: JSON.stringify(payload) }),
 };
 

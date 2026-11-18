@@ -39,10 +39,15 @@ console.log('===================================================================
 console.log('  KNOWLEDGE BATTLE - TIKTOK LIVE GAME SHOW (NO DOCKER)');
 console.log('===================================================================');
 console.log('-> Backend API & Socket.IO : http://localhost:4100');
-console.log('-> Streamer Dashboard      : http://localhost:3001/dashboard');
+console.log('-> Trang chu Game Hub      : http://localhost:3001/');
+console.log('-> Dashboard Trac nghiem   : http://localhost:3001/dashboard');
+console.log('-> OBS Trac nghiem (Ngang) : http://localhost:3001/game/KB2026');
+console.log('-> OBS Trac nghiem (Doc)   : http://localhost:3001/game/KB2026?layout=vertical');
+console.log('-> Dashboard Keo Co        : http://localhost:3001/tug/dashboard');
+console.log('-> OBS Keo Co              : http://localhost:3001/tug/KB2026');
+console.log('-> Dashboard Duoi Hinh     : http://localhost:3001/catchword/dashboard');
+console.log('-> OBS Duoi Hinh           : http://localhost:3001/catchword/KB2026');
 console.log('-> Admin Question Bank     : http://localhost:3001/admin');
-console.log('-> OBS Game Show (1920x1080): http://localhost:3001/game/KB2026');
-console.log('-> OBS Game Show (1080x1920): http://localhost:3001/game/KB2026?layout=vertical');
 console.log('===================================================================\n');
 
 function spawnService(name, colorCode, cwd, args) {
@@ -88,4 +93,7 @@ function shutdown() {
 
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+
+setInterval(() => {}, 3600000);
+
 
