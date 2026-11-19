@@ -155,5 +155,27 @@ export const api = {
   catchwordStop: (roomCode = 'KB2026') => request<any>(`/catchword/${roomCode}/stop`, { method: 'POST' }),
   catchwordSimulate: (roomCode: string, payload: { kind: string; coins?: number; count?: number }) =>
     request<any>(`/catchword/${roomCode}/simulate`, { method: 'POST', body: JSON.stringify(payload) }),
+
+  // ===== AI Generation Engine =====
+  getAiStatus: () => request<any>('/ai/status'),
+  generateAiQuestions: (payload: {
+    topic: string;
+    count?: number;
+    difficulty?: string;
+    apiKey?: string;
+    provider?: string;
+    autoPublish?: boolean;
+  }) => request<any>('/ai/generate-questions', { method: 'POST', body: JSON.stringify(payload) }),
+  saveAiQuestions: (payload: { questions: any[]; autoPublish?: boolean }) =>
+    request<any>('/ai/save-questions', { method: 'POST', body: JSON.stringify(payload) }),
+  generateAiCatchwords: (payload: {
+    topic: string;
+    count?: number;
+    apiKey?: string;
+    provider?: string;
+    autoSave?: boolean;
+  }) => request<any>('/ai/generate-catchwords', { method: 'POST', body: JSON.stringify(payload) }),
+  saveAiCatchwords: (payload: { puzzles: any[] }) =>
+    request<any>('/ai/save-catchwords', { method: 'POST', body: JSON.stringify(payload) }),
 };
 

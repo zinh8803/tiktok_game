@@ -206,6 +206,7 @@ import { useRoute } from 'vue-router';
 import type { Socket } from 'socket.io-client';
 import { api } from '../services/api';
 import { createRoomSocket } from '../services/socket';
+import { soundFX } from '../services/sound';
 import LiveStageCalibrator from '../components/LiveStageCalibrator.vue';
 import { useStageCalib } from '../composables/useStageCalib';
 
@@ -293,12 +294,11 @@ function onEffect(e: any) {
     pushFeed(e);
   }
   if (e.kind === 'SOLVED') {
-    beep(e.order === 1 ? 988 : 784, 0.14);
+    soundFX.playCorrectAnswer();
   } else if (e.kind === 'FREE_HINT_UNLOCKED' || e.kind === 'HINT') {
-    beep(660, 0.14);
+    soundFX.playRevealTile();
   } else if (e.kind === 'GIFT') {
-    beep(880, 0.15);
-    setTimeout(() => beep(1320, 0.2), 110);
+    soundFX.playCorrectAnswer();
     if (e.tier !== 'LETTER') {
       bigGift.value = { ...e, id: ++feedId };
       shaking.value = true;
@@ -308,7 +308,7 @@ function onEffect(e: any) {
       }, 3200);
     }
   } else if (e.kind === 'WINNER') {
-    [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => beep(f, 0.24, 'square', 0.06), i * 150));
+    soundFX.playVictoryFanfare();
   }
 }
 

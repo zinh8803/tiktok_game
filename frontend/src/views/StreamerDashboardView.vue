@@ -350,6 +350,101 @@
               </div>
             </div>
 
+            <!-- MC Ảo AI Đọc Câu Hỏi Tự Động (Web Speech TTS) -->
+            <div style="margin-bottom: 1.15rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-subtle);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem; flex-wrap: wrap; gap: 0.5rem;">
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                  <span style="font-size: 1.1rem;">🎙️</span>
+                  <strong style="color: #6ee7b7; font-size: 0.92rem;">
+                    MC Ảo AI — Giọng Đọc Câu Hỏi Tự Động
+                  </strong>
+                  <span v-if="voiceIsSpeaking" class="badge badge-purple" style="font-size: 0.7rem; animation: pulse 1.5s infinite;">
+                    🔴 Đang đọc...
+                  </span>
+                </div>
+                <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+                  <button
+                    type="button"
+                    class="btn"
+                    :class="voiceEnabled ? 'btn-cyan' : 'btn-secondary'"
+                    style="padding: 0.25rem 0.7rem; font-size: 0.76rem;"
+                    @click="voiceEnabled = !voiceEnabled"
+                  >
+                    {{ voiceEnabled ? '🟢 MC AI: Đang Bật' : '⚪ MC AI: Đang Tắt' }}
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-secondary"
+                    style="padding: 0.25rem 0.6rem; font-size: 0.76rem;"
+                    :disabled="!voiceEnabled"
+                    @click="testVoice"
+                  >
+                    🎤 Thử giọng
+                  </button>
+                  <button
+                    v-if="voiceIsSpeaking"
+                    type="button"
+                    class="btn btn-purple"
+                    style="padding: 0.25rem 0.6rem; font-size: 0.76rem;"
+                    @click="stopVoice"
+                  >
+                    ⏹ Dừng
+                  </button>
+                </div>
+              </div>
+
+              <div
+                v-if="voiceEnabled"
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; padding: 0.75rem;"
+              >
+                <div class="form-field" style="margin: 0;">
+                  <label style="font-size: 0.78rem; color: #a7f3d0; margin-bottom: 0.25rem; display: block;">
+                    🗣️ Giọng đọc tiếng Việt
+                  </label>
+                  <select
+                    v-model="selectedVoiceURI"
+                    class="select-control"
+                    style="padding: 0.35rem 0.6rem; font-size: 0.78rem; width: 100%;"
+                  >
+                    <option
+                      v-for="v in vietnameseVoices"
+                      :key="v.voiceURI"
+                      :value="v.voiceURI"
+                    >
+                      {{ v.name }}
+                    </option>
+                  </select>
+                  <small style="display: block; margin-top: 0.3rem; font-size: 0.68rem; color: #94a3b8; line-height: 1.3;">
+                    💡 Đã có sẵn <strong>Chị Google TikTok</strong> & <strong>5 phong cách MC AI</strong>. Muốn thêm giọng Microsoft Hoài My/Nam Minh: Mở Windows Settings → Time & Language → Speech → Thêm gói Tiếng Việt.
+                  </small>
+                </div>
+
+                <div class="form-field" style="margin: 0;">
+                  <label style="font-size: 0.78rem; color: #a7f3d0; margin-bottom: 0.25rem; display: flex; justify-content: space-between;">
+                    <span>⚡ Tốc độ đọc câu</span>
+                    <strong style="color: var(--accent-gold);">{{ voiceRate }}x</strong>
+                  </label>
+                  <div style="display: flex; align-items: center; gap: 0.4rem;">
+                    <input
+                      v-model.number="voiceRate"
+                      type="range"
+                      min="0.8"
+                      max="1.4"
+                      step="0.05"
+                      style="flex: 1; accent-color: #10b981; cursor: pointer;"
+                    />
+                  </div>
+                </div>
+
+                <div class="form-field" style="margin: 0; display: flex; align-items: center; grid-column: 1 / -1;">
+                  <label class="checkbox-label" style="font-size: 0.78rem; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;">
+                    <input v-model="readOptions" type="checkbox" style="accent-color: #10b981;" />
+                    <span>Đọc kèm cả 4 phương án A, B, C, D (Nếu tắt chỉ đọc nội dung câu hỏi để giữ nhịp livestream nhanh)</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem;">
               <strong style="color: var(--accent-cyan); font-size: 0.92rem;">
                 🎨 Phong Cách Giao Diện OBS Live (Theme)
@@ -778,8 +873,22 @@ import {
 } from 'lucide-vue-next';
 import { api } from '../services/api';
 import { createRoomSocket } from '../services/socket';
+import { useAiVoice } from '../composables/useAiVoice';
 import GameShowView from './GameShowView.vue';
 import type { Socket } from 'socket.io-client';
+
+const {
+  voiceEnabled,
+  voiceVolume,
+  voiceRate,
+  readOptions,
+  readExplanation,
+  selectedVoiceURI,
+  vietnameseVoices,
+  isSpeaking: voiceIsSpeaking,
+  testVoice,
+  stop: stopVoice,
+} = useAiVoice();
 
 const roomCode = ref('KB2026');
 const stats = ref<any>({});

@@ -740,6 +740,7 @@ import {
 import { api } from '../services/api';
 import { createRoomSocket } from '../services/socket';
 import { soundFX, LOFI_STYLE_OPTIONS, type LofiStyle } from '../services/sound';
+import { useAiVoice } from '../composables/useAiVoice';
 import { PhaserStageController } from '../game/PhaserStage';
 import type { Socket } from 'socket.io-client';
 
@@ -770,6 +771,7 @@ const stageCardRef = ref<HTMLElement | null>(null);
 let phaserStage: PhaserStageController | null = null;
 let socket: Socket | null = null;
 let frameResizeObserver: ResizeObserver | null = null;
+const aiVoice = useAiVoice();
 
 type LayoutPreset = 'fullscreen' | 'tiktok-safe-zone' | '362x444' | 'custom';
 type GameTheme = 'cute' | 'modern' | 'galaxy' | 'luxury';
@@ -1541,6 +1543,12 @@ onMounted(async () => {
         soundFX.playCountdownTick(initialSec);
       }
     }
+    // Giọng đọc MC Ảo AI đọc số câu hỏi trên màn hình LIVE OBS
+    if (!props.embedded) {
+      aiVoice.speakQuestion({
+        index: payload.questionIndex,
+      });
+    }
     requestAnimationFrame(recalcAutoFit);
   });
 
@@ -1573,6 +1581,16 @@ onMounted(async () => {
       if (!isSoundMuted.value && Number(payload?.correctPlayersCount || 0) > 0) {
         soundFX.playCorrectAnswer();
       }
+      // Giọng đọc MC Ảo AI đọc đáp án đúng, số người đúng và tên người nhanh nhất
+      if (!props.embedded) {
+        const fastestName = payload.fastestPlayers?.[0]?.nickname || payload.fastestPlayers?.[0]?.username;
+        aiVoice.speakResult({
+          correctOption: payload.correctOption,
+          correctContent: payload.options?.[payload.correctOption],
+          correctCount: payload.correctPlayersCount,
+          fastestPlayerName: fastestName,
+        });
+      }
       requestAnimationFrame(recalcAutoFit);
     }
   });
@@ -1584,6 +1602,13 @@ onMounted(async () => {
   socket.on('game.finished', (payload) => {
     if (payload.leaderboard) {
       leaderboard.value = payload.leaderboard;
+      if (!props.embedded && payload.leaderboard.length > 0) {
+        const champ = payload.leaderboard[0];
+        aiVoice.speakWinner({
+          nickname: champ.nickname || champ.username || 'Quán quân',
+          score: champ.totalScore || 0,
+        });
+      }
     }
     requestAnimationFrame(recalcAutoFit);
   });
@@ -1650,6 +1675,7 @@ onBeforeUnmount(() => {
   }
   if (!props.embedded) {
     soundFX.stopBgm();
+    aiVoice.stop();
   }
   socket?.disconnect();
   phaserStage?.destroy();

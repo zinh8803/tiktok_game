@@ -9,10 +9,12 @@ import { CatchwordService } from './catchword/catchword.service';
 import { ApiController } from './controllers/api.controller';
 import { TugOfWarController } from './controllers/tug-of-war.controller';
 import { CatchwordController } from './controllers/catchword.controller';
+import { AiController } from './controllers/ai.controller';
+import { AiService } from './ai/ai.service';
 
 @Module({
   imports: [],
-  controllers: [ApiController, TugOfWarController, CatchwordController],
+  controllers: [ApiController, TugOfWarController, CatchwordController, AiController],
   providers: [
     DatabaseService,
     RealtimeGateway,
@@ -21,6 +23,7 @@ import { CatchwordController } from './controllers/catchword.controller';
     CatchwordService,
     EventProcessorService,
     TikTokService,
+    AiService,
   ],
   exports: [
     DatabaseService,
@@ -30,6 +33,7 @@ import { CatchwordController } from './controllers/catchword.controller';
     CatchwordService,
     EventProcessorService,
     TikTokService,
+    AiService,
   ],
 })
 export class AppModule {}

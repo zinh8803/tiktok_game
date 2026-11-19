@@ -264,6 +264,7 @@ import { useRoute } from 'vue-router';
 import type { Socket } from 'socket.io-client';
 import { api } from '../services/api';
 import { createRoomSocket } from '../services/socket';
+import { soundFX } from '../services/sound';
 import LiveStageCalibrator from '../components/LiveStageCalibrator.vue';
 import { useStageCalib } from '../composables/useStageCalib';
 
@@ -377,8 +378,7 @@ function pushFeed(e: any) {
 function onEffect(e: any) {
   if (e.kind === 'JOIN' || e.kind === 'SYSTEM' || e.kind === 'GIFT') pushFeed(e);
   if (e.kind === 'GIFT') {
-    beep(880, 0.15);
-    setTimeout(() => beep(1320, 0.18), 120);
+    soundFX.playCorrectAnswer();
     if (e.tier === 'FREEZE' || e.tier === 'STORM' || e.tier === 'DOUBLE') {
       bigGift.value = { ...e, id: ++feedId };
       shaking.value = true;
@@ -389,7 +389,7 @@ function onEffect(e: any) {
     }
   }
   if (e.kind === 'WINNER') {
-    [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => beep(f, 0.25, 'square', 0.06), i * 160));
+    soundFX.playVictoryFanfare();
   }
 }
 
@@ -404,7 +404,7 @@ watch(
       text: `${rv.delta < 0 ? '🔴 Đỏ' : '🔵 Xanh'} kéo ${Math.abs(rv.delta)}!`,
     };
     shaking.value = true;
-    beep(330, 0.2, 'sawtooth', 0.05);
+    soundFX.playPullRope();
     setTimeout(() => (shaking.value = false), 600);
     setTimeout(() => (deltaFlash.value = null), 2200);
   }

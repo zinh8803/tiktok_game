@@ -9,6 +9,7 @@
     "start:dev": "ts-node src/main.ts",
     "start:prod": "node dist/main.js",
     "seed": "ts-node src/database/seed.ts",
+    "verify": "ts-node src/test/verify-mvp.ts",
     "test": "ts-node src/test/verify-mvp.ts"
   },
   "dependencies": {

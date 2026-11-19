@@ -69,6 +69,66 @@
         </label>
       </div>
 
+      <!-- SOUND FX CONTROLS (FLOATING) -->
+      <div class="cal-sound-box">
+        <div class="cal-sound-header">
+          <button
+            type="button"
+            class="cal-sound-toggle-btn"
+            :class="{ active: soundEnabled }"
+            @click="toggleSound"
+          >
+            <span>{{ soundEnabled ? '🔊 Âm thanh: BẬT' : '🔇 Âm thanh: TẮT' }}</span>
+          </button>
+          <button type="button" class="cal-test-sound-btn" :disabled="!soundEnabled" @click="playCorrect">
+            🔔 Test chuông
+          </button>
+        </div>
+        <label v-if="soundEnabled" class="cal-field sound-slider">
+          <span><span>Âm lượng Sound FX</span><strong>{{ Math.round(soundVolume * 100) }}%</strong></span>
+          <input v-model.number="soundVolume" type="range" min="0" max="1" step="0.05" />
+        </label>
+      </div>
+
+      <!-- MC AI VOICE CONTROLS (FLOATING) -->
+      <div class="cal-voice-box">
+        <div class="cal-sound-header">
+          <button
+            type="button"
+            class="cal-voice-toggle-btn"
+            :class="{ active: voiceEnabled }"
+            @click="voiceEnabled = !voiceEnabled"
+          >
+            <span>{{ voiceEnabled ? '🗣️ MC Ảo AI: BẬT' : '🤐 MC Ảo AI: TẮT' }}</span>
+          </button>
+          <button type="button" class="cal-test-voice-btn" :disabled="!voiceEnabled" @click="testVoice">
+            🎤 Thử giọng
+          </button>
+        </div>
+        <div v-if="voiceEnabled" class="cal-voice-body">
+          <label class="cal-field" style="margin-bottom: 0.45rem;">
+            <span><span>Giọng đọc Tiếng Việt</span></span>
+            <select
+              v-model="selectedVoiceURI"
+              class="cal-select-control text-xs"
+              style="width: 100%; margin-top: 0.25rem; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 4px; padding: 0.25rem 0.4rem; color: #fff;"
+            >
+              <option v-for="v in vietnameseVoices" :key="v.voiceURI" :value="v.voiceURI">
+                {{ v.name }}
+              </option>
+            </select>
+          </label>
+          <label class="cal-field voice-slider">
+            <span><span>Tốc độ đọc</span><strong>{{ voiceRate }}x</strong></span>
+            <input v-model.number="voiceRate" type="range" min="0.8" max="1.4" step="0.05" />
+          </label>
+          <label class="cal-checkbox-row">
+            <input v-model="readOptions" type="checkbox" />
+            <span>Đọc to cả 4 phương án A, B, C, D</span>
+          </label>
+        </div>
+      </div>
+
       <div class="cal-foot">
         <button type="button" class="cal-reset-btn" @click="$emit('reset')">↺ Đặt lại mặc định</button>
       </div>
@@ -147,6 +207,85 @@
         <input v-model.number="calib.avatarSize" type="range" min="22" max="54" step="1" @input="$emit('change')" />
       </label>
     </div>
+
+    <!-- SOUND FX CONTROLS (PANEL) -->
+    <div class="cal-sound-panel-box">
+      <div class="sound-panel-left">
+        <button
+          type="button"
+          class="btn btn-sm"
+          :class="soundEnabled ? 'btn-emerald' : 'btn-secondary'"
+          @click="toggleSound"
+        >
+          <span>{{ soundEnabled ? '🔊 Âm thanh Sound FX: ĐANG BẬT' : '🔇 Âm thanh Sound FX: ĐANG TẮT' }}</span>
+        </button>
+        <button
+          type="button"
+          class="btn btn-secondary btn-sm"
+          :disabled="!soundEnabled"
+          @click="playCorrect"
+        >
+          🔔 Thử chuông đúng
+        </button>
+        <button
+          type="button"
+          class="btn btn-secondary btn-sm"
+          :disabled="!soundEnabled"
+          @click="playStart"
+        >
+          🎺 Thử tiếng bắt đầu
+        </button>
+      </div>
+      <div v-if="soundEnabled" class="sound-panel-right">
+        <span class="text-xs text-slate-400 font-semibold">Âm lượng: {{ Math.round(soundVolume * 100) }}%</span>
+        <input v-model.number="soundVolume" type="range" min="0" max="1" step="0.05" class="sound-range" />
+      </div>
+    </div>
+
+    <!-- MC AI VOICE CONTROLS (PANEL) -->
+    <div class="cal-voice-panel-box">
+      <div class="voice-panel-left">
+        <button
+          type="button"
+          class="btn btn-sm"
+          :class="voiceEnabled ? 'btn-gold' : 'btn-secondary'"
+          @click="voiceEnabled = !voiceEnabled"
+        >
+          <span>{{ voiceEnabled ? '🗣️ MC Ảo AI Đọc Câu Hỏi: ĐANG BẬT' : '🤐 MC Ảo AI: ĐANG TẮT' }}</span>
+        </button>
+        <button
+          type="button"
+          class="btn btn-secondary btn-sm"
+          :disabled="!voiceEnabled"
+          @click="testVoice"
+        >
+          🎤 Thử giọng MC
+        </button>
+        <label v-if="voiceEnabled" class="inline-flex items-center gap-1.5 text-xs text-slate-300 font-semibold cursor-pointer">
+          <input v-model="readOptions" type="checkbox" class="accent-cyan-400" />
+          <span>Đọc cả 4 đáp án A B C D</span>
+        </label>
+        <label v-if="voiceEnabled" class="inline-flex items-center gap-1.5 text-xs text-slate-300 font-semibold cursor-pointer">
+          <input v-model="readExplanation" type="checkbox" class="accent-cyan-400" />
+          <span>Đọc giải thích khi mở đáp án</span>
+        </label>
+      </div>
+      <div v-if="voiceEnabled" class="voice-panel-right" style="display: flex; gap: 0.65rem; align-items: center; flex-wrap: wrap;">
+        <select
+          v-model="selectedVoiceURI"
+          class="select-control"
+          style="font-size: 0.76rem; padding: 0.25rem 0.5rem; max-width: 250px; background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 4px; color: #fff;"
+        >
+          <option v-for="v in vietnameseVoices" :key="v.voiceURI" :value="v.voiceURI">
+            {{ v.name }}
+          </option>
+        </select>
+        <div style="display: flex; align-items: center; gap: 0.35rem;">
+          <span class="text-xs text-slate-400 font-semibold">{{ voiceRate }}x</span>
+          <input v-model.number="voiceRate" type="range" min="0.8" max="1.4" step="0.05" class="sound-range" style="width: 80px;" />
+        </div>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -154,6 +293,27 @@
 import { ref } from 'vue';
 import { SlidersHorizontal } from 'lucide-vue-next';
 import type { StageCalibState, StagePresetName } from '../composables/useStageCalib';
+import { useSoundEffects } from '../composables/useSoundEffects';
+import { useAiVoice } from '../composables/useAiVoice';
+
+const {
+  soundEnabled,
+  soundVolume,
+  toggleSound,
+  playCorrect,
+  playStart,
+} = useSoundEffects();
+
+const {
+  voiceEnabled,
+  voiceVolume,
+  voiceRate,
+  readOptions,
+  readExplanation,
+  selectedVoiceURI,
+  vietnameseVoices,
+  testVoice,
+} = useAiVoice();
 
 defineProps<{
   mode: 'floating' | 'panel';
@@ -359,6 +519,188 @@ function signed(v: number) {
 
 .icon-cyan {
   color: var(--accent-cyan);
+}
+
+.cal-sound-box {
+  margin-top: 0.6rem;
+  padding: 0.65rem 0.75rem;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cal-sound-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.cal-sound-toggle-btn {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border-radius: 0.45rem;
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cal-sound-toggle-btn.active {
+  background: #059669;
+  border-color: #10b981;
+  color: #fff;
+}
+
+.cal-test-sound-btn {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.75rem;
+  border-radius: 0.45rem;
+  background: #334155;
+  color: #e2e8f0;
+  border: none;
+  cursor: pointer;
+}
+.cal-test-sound-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.cal-sound-panel-box {
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.sound-panel-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.sound-panel-right {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.sound-range {
+  width: 90px;
+  cursor: pointer;
+}
+
+.btn-emerald {
+  background: #059669;
+  color: #fff;
+}
+.btn-emerald:hover {
+  background: #047857;
+}
+
+/* AI Voice Styles */
+.cal-voice-box {
+  margin-top: 0.5rem;
+  padding: 0.65rem 0.75rem;
+  background: rgba(30, 27, 75, 0.75);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cal-voice-toggle-btn {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border-radius: 0.45rem;
+  border: 1px solid #475569;
+  background: #1e293b;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cal-voice-toggle-btn.active {
+  background: #d97706;
+  border-color: #f59e0b;
+  color: #fff;
+}
+
+.cal-test-voice-btn {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.75rem;
+  border-radius: 0.45rem;
+  background: #475569;
+  color: #fef08a;
+  border: none;
+  cursor: pointer;
+}
+.cal-test-voice-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.cal-voice-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.cal-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.76rem;
+  color: #cbd5e1;
+  cursor: pointer;
+}
+
+.cal-voice-panel-box {
+  margin-top: 0.6rem;
+  padding: 0.75rem 1rem;
+  background: rgba(30, 27, 75, 0.5);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.voice-panel-left {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.voice-panel-right {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.btn-gold {
+  background: #d97706;
+  color: #fff;
+}
+.btn-gold:hover {
+  background: #b45309;
 }
 
 @media (max-width: 560px) {

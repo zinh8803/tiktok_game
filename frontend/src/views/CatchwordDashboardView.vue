@@ -284,6 +284,41 @@
             </div>
           </div>
 
+          <!-- AI Catchword Generator -->
+          <div class="ai-box mb-4">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="flex items-center gap-2 text-amber-300 font-bold text-sm">
+                <Sparkles :size="16" />
+                <span>AI Sinh Câu Đố Đuổi Hình Bắt Chữ Tự Động</span>
+              </h3>
+              <span class="badge badge-gold">Gemini / Smart Engine</span>
+            </div>
+            <p class="text-xs text-slate-300 mb-2">
+              Nhập chủ đề để AI tự động ghép các biểu tượng Emoji và thành ngữ tiếng Việt chuẩn xác!
+            </p>
+            <div class="ai-input-row">
+              <input
+                v-model="aiTopic"
+                class="input-control"
+                placeholder="Chủ đề (vd: Ca dao tục ngữ, Thành ngữ dân gian, Đố mẹo)"
+              />
+              <select v-model.number="aiCount" class="select-control count-sel">
+                <option :value="3">3 câu</option>
+                <option :value="5">5 câu</option>
+                <option :value="10">10 câu</option>
+              </select>
+              <button
+                type="button"
+                class="btn btn-gold"
+                :disabled="isGeneratingAi"
+                @click="handleGenerateAiCatchwords"
+              >
+                <Sparkles :size="15" />
+                <span>{{ isGeneratingAi ? 'Đang tạo...' : '🚀 AI Sinh Ngay' }}</span>
+              </button>
+            </div>
+          </div>
+
           <!-- Quick Puzzle Creator -->
           <form class="creator-box" @submit.prevent="submitCustomPuzzle">
             <h3>➕ Thêm câu Đuổi Hình Bắt Chữ tự tạo (ưu tiên ra đầu tiên)</h3>
@@ -635,6 +670,32 @@ async function runSim(kind: string, opts: { coins?: number; count?: number } = {
     showToast(`Đã chạy giả lập: ${kind}`, 'success');
   } catch (err: any) {
     showToast(err?.message || 'Lỗi giả lập', 'error');
+  }
+}
+
+const aiTopic = ref('Ca dao tục ngữ Việt Nam');
+const aiCount = ref(5);
+const isGeneratingAi = ref(false);
+
+async function handleGenerateAiCatchwords() {
+  if (!aiTopic.value.trim()) {
+    showToast('Vui lòng nhập chủ đề câu đố', 'error');
+    return;
+  }
+  isGeneratingAi.value = true;
+  showToast('Đang kết nối AI sinh câu đố...', 'info');
+  try {
+    const res = await api.generateAiCatchwords({
+      topic: aiTopic.value,
+      count: aiCount.value,
+      autoSave: true,
+    });
+    await loadInitial();
+    showToast(`Đã sinh thành công ${res.count || 0} câu đố AI và lưu vào ngân hàng!`, 'success');
+  } catch (err: any) {
+    showToast(`Lỗi sinh câu đố AI: ${err.message}`, 'error');
+  } finally {
+    isGeneratingAi.value = false;
   }
 }
 
@@ -991,6 +1052,21 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(250, 204, 21, 0.25);
   border-radius: 0.6rem;
   padding: 0.45rem 0.65rem;
+}
+
+.ai-box {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(250, 204, 21, 0.3);
+  border-radius: 0.85rem;
+  padding: 0.85rem 1rem;
+}
+.ai-input-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.count-sel {
+  max-width: 110px;
 }
 .tier-item strong {
   display: block;

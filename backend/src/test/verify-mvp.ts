@@ -5,6 +5,8 @@ import { EventProcessorService } from '../event-processor/event-processor.servic
 import { TikTokService } from '../integrations/tiktok/tiktok.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { TugOfWarService } from '../tug-of-war/tug-of-war.service';
+import { CatchwordService } from '../catchword/catchword.service';
+import { AiService } from '../ai/ai.service';
 
 async function runVerificationChecklist() {
   console.log('=== KNOWLEDGE BATTLE - KIỂM THỬ NGHIỆP VỤ THEO CHECKLIST MỤC 10.1 ===');
@@ -113,7 +115,20 @@ async function runVerificationChecklist() {
   assert.strictEqual(p2.totalScore, 0, 'Người trả lời sai phải có 0 điểm');
   console.log(`[PASS] 5. Công thức tính điểm đúng chuẩn: Người chơi 1 đạt ${p1.totalScore} điểm, Người chơi 2 đạt ${p2.totalScore} điểm.`);
 
-  // 7. Bình luận sau thời hạn (khi câu hỏi đã đóng) -> Không tính điểm
+  // 7. Bình luận sau thời hạn:
+  // 7a. Người chơi 1 đã trả lời trước đó cố gửi lại khi câu hỏi đóng -> Bị từ chối
+  const reAnswerAttempt = eventProcessor.processEvent({
+    id: `${runPrefix}-evt-player1-reanswer`,
+    roomId: roomCode,
+    type: 'COMMENT',
+    user: { id: 'tt-u1', username: 'player_one', nickname: 'Người Chơi 1' },
+    payload: { content: correctOpt },
+    receivedAt: Date.now(),
+  });
+  assert.strictEqual((reAnswerAttempt as any).acceptedAnswer, false, 'Người chơi đã trả lời không được đổi đáp án khi câu hỏi đóng');
+
+  // 7b. Người chơi 3 gửi sau khi đã hết cả cửa sổ bù trễ livestream (LATE_STREAM_GRACE_MS) -> Không tính điểm
+  runtime.questionEndsAt = Date.now() - 10000;
   const lateAttempt = eventProcessor.processEvent({
     id: `${runPrefix}-evt-player3-late`,
     roomId: roomCode,
@@ -122,7 +137,7 @@ async function runVerificationChecklist() {
     payload: { content: correctOpt },
     receivedAt: Date.now(),
   });
-  assert.strictEqual((lateAttempt as any).acceptedAnswer, false, 'Trả lời sau khi câu hỏi đóng không được tính điểm');
+  assert.strictEqual((lateAttempt as any).acceptedAnswer, false, 'Trả lời sau khi hết thời gian bù trễ không được tính điểm');
   console.log('[PASS] 6. Bình luận sau thời hạn không được tính điểm.');
 
   // 8. OBS tải lại Browser Source -> Khôi phục trạng thái từ backend
@@ -178,7 +193,105 @@ async function runVerificationChecklist() {
   console.log('[PASS] 9. Quà tặng có thể cấu hình để loại một đáp án sai thay vì cộng điểm.');
 
   gameEngine.resetToWaitingRoom(roomCode);
-  console.log('=== TẤT CẢ 9/9 BÀI KIỂM THỬ NGHIỆP VỤ ĐỀU ĐẠT (100% PASS) ===');
+
+  // 10. Kiểm thử Kéo Co Tri Thức (Tug of War)
+  const tugService = new TugOfWarService(db, mockGateway);
+  tugService.openLobby(roomCode);
+  tugService.start(roomCode);
+  tugService.nextQuestion(roomCode); // Chuyển ngay vào câu hỏi 1
+  const tugState1 = tugService.getPublicState(roomCode);
+  assert.strictEqual(tugState1.status, 'QUESTION', 'Kéo Co phải vào status QUESTION sau khi mở câu hỏi');
+
+  // Lấy câu hỏi hiện tại từ runtime để kiểm thử đáp án
+  const tugRt = (tugService as any).getRuntime(roomCode);
+  const currentTugQ = tugRt.questions[tugRt.questionIndex];
+  assert.ok(currentTugQ, 'Kéo Co phải có câu hỏi khi bắt đầu');
+
+  // Người chơi tham gia team Đỏ (bình luận '1')
+  tugService.handleComment(
+    {
+      id: `${runPrefix}-tug-c1`,
+      roomId: roomCode,
+      type: 'COMMENT',
+      user: { id: 'tt-tug-red1', username: 'red_champ', nickname: 'Anh Hùng Đỏ' },
+      payload: { content: '1' }, // chọn Đỏ
+      receivedAt: Date.now(),
+    },
+    null
+  );
+
+  // Người chơi gửi đáp án đúng
+  const ansResult = tugService.handleComment(
+    {
+      id: `${runPrefix}-tug-ans1`,
+      roomId: roomCode,
+      type: 'COMMENT',
+      user: { id: 'tt-tug-red1', username: 'red_champ', nickname: 'Anh Hùng Đỏ' },
+      payload: { content: currentTugQ.correctOption },
+      receivedAt: Date.now(),
+    },
+    currentTugQ.correctOption
+  );
+  assert.strictEqual(ansResult.action, 'TUG_ANSWER_RECORDED', 'Đáp án kéo co phải được ghi nhận');
+
+  // Chốt câu hỏi (reveal) -> tính lực kéo và di chuyển dây
+  tugService.reveal(roomCode);
+  const tugStateAfterAns = tugService.getPublicState(roomCode);
+  assert.ok(tugStateAfterAns.teams.RED.count >= 1, 'Đội Đỏ phải ghi nhận thành viên');
+  assert.ok(tugStateAfterAns.teams.RED.contribution >= 1, 'Đội Đỏ phải được cộng điểm/lực kéo');
+  assert.ok(tugStateAfterAns.rope < 0, 'Dây kéo phải dịch chuyển về phía đội Đỏ (âm)');
+  tugService.stop(roomCode);
+  console.log('[PASS] 10. Kéo Co Tri Thức: Chọn đội, ghi nhận đáp án, chốt điểm kéo dây chính xác.');
+
+  // 11. Kiểm thử Đuổi Hình Bắt Chữ LIVE (Catchword)
+  const catchwordService = new CatchwordService(mockGateway);
+  catchwordService.openLobby(roomCode);
+  catchwordService.start(roomCode);
+  catchwordService.nextPuzzle(roomCode); // Chuyển ngay vào câu đố 1
+  const cwState1 = catchwordService.getPublicState(roomCode, true);
+  assert.strictEqual(cwState1.status, 'QUESTION', 'Đuổi Hình Bắt Chữ phải vào status QUESTION');
+  assert.ok(cwState1.puzzle, 'Đuổi Hình Bắt Chữ phải có puzzle hiện tại');
+
+  // Người chơi đoán đúng câu đố (lấy từ bí mật test)
+  const cwAnswer = cwState1.secret.answer;
+  catchwordService.handleComment({
+    id: `${runPrefix}-cw-guess1`,
+    roomId: roomCode,
+    type: 'COMMENT',
+    user: { id: 'tt-cw-u1', username: 'puzzle_master', nickname: 'Cao Thủ Bắt Chữ' },
+    payload: { content: cwAnswer },
+    receivedAt: Date.now(),
+  });
+  const cwStateAfterGuess = catchwordService.getPublicState(roomCode);
+  assert.ok(cwStateAfterGuess.solvedCount >= 1, 'Người đoán đúng đầu tiên phải được ghi nhận');
+  assert.ok(cwStateAfterGuess.leaderboard[0].score >= 80, 'Điểm người đoán đúng phải đạt điểm thưởng hợp lệ');
+  catchwordService.stop(roomCode);
+  console.log('[PASS] 11. Đuổi Hình Bắt Chữ LIVE: Khởi động vòng, nhận diện đáp án chuẩn hóa tiếng Việt, tính điểm xếp hạng.');
+
+  // 12. Kiểm thử AI Engine: Tự động sinh câu hỏi và câu đố đuổi hình bắt chữ
+  const aiService = new AiService(db, catchwordService);
+  const aiQuestions = await aiService.generateQuestions({
+    topic: 'Lịch sử Việt Nam hào hùng',
+    count: 2,
+    provider: 'OFFLINE',
+  });
+  assert.strictEqual(aiQuestions.length, 2, 'AI phải sinh đúng số lượng câu hỏi yêu cầu');
+  assert.ok(aiQuestions[0].options.A, 'Câu hỏi AI phải có đầy đủ 4 đáp án');
+  const savedAiQs = aiService.saveQuestionsToDatabase(aiQuestions, true);
+  assert.strictEqual(savedAiQs.length, 2, 'Phải lưu thành công 2 câu hỏi AI vào SQLite');
+  assert.strictEqual(savedAiQs[0].source?.sourceType, 'AI', 'Câu hỏi phải mang nhãn nguồn AI');
+
+  const aiCatchwords = await aiService.generateCatchwords({
+    topic: 'Ca dao tục ngữ',
+    count: 2,
+    provider: 'OFFLINE',
+  });
+  assert.strictEqual(aiCatchwords.length, 2, 'AI phải sinh đúng số lượng câu đố đuổi hình bắt chữ');
+  const savedCatchwords = aiService.saveCatchwordsToBank(aiCatchwords);
+  assert.strictEqual(savedCatchwords.length, 2, 'Phải lưu thành công 2 câu đố AI vào CatchwordService');
+  console.log('[PASS] 12. AI Question & Puzzle Engine: Tự động sinh câu hỏi, câu đố và lưu trực tiếp vào ngân hàng.');
+
+  console.log('=== TẤT CẢ 12/12 BÀI KIỂM THỬ NGHIỆP VỤ & AI ĐỀU ĐẠT (100% PASS) ===');
 }
 
 runVerificationChecklist().catch((err) => {
