@@ -7,6 +7,52 @@ const STORAGE_KEY_PITCH = 'kb_voice_pitch';
 const STORAGE_KEY_VOICE_URI = 'kb_voice_uri_v2';
 const STORAGE_KEY_READ_OPTIONS = 'kb_voice_read_options';
 const STORAGE_KEY_READ_EXP = 'kb_voice_read_exp';
+const SPEECH_DEDUP_KEY = 'kb_speech_last_spoken';
+
+/**
+ * Khóa chống vọng âm đa tab (Cross-tab deduplication):
+ * Khi mở đồng thời 2 tab (ví dụ 1 tab Admin và 1 tab OBS/Game), cả 2 tab đều nhận socket event.
+ * Hàm này kiểm tra: nếu CÙNG MỘT CÂU NÓI đã được phát trong vòng 2 giây qua ở bất kỳ tab nào,
+ * tab sau sẽ tự động bỏ qua, triệt tiêu 100% hiện tượng vọng âm đè tiếng.
+ */
+function isDuplicateSpeech(text: string): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const raw = localStorage.getItem(SPEECH_DEDUP_KEY);
+    const now = Date.now();
+    if (raw) {
+      const last = JSON.parse(raw);
+      if (last.text === text && now - last.timestamp < 2000) {
+        return true;
+      }
+    }
+    localStorage.setItem(
+      SPEECH_DEDUP_KEY,
+      JSON.stringify({
+        text,
+        timestamp: now,
+      }),
+    );
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+// Tự động mở khóa chính sách Autoplay của trình duyệt khi người dùng chạm hoặc bấm bất kỳ đâu
+if (typeof window !== 'undefined') {
+  const unlockAudio = () => {
+    try {
+      const silent = new Audio(
+        'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA',
+      );
+      silent.play().catch(() => {});
+    } catch {}
+  };
+  window.addEventListener('pointerdown', unlockAudio, { passive: true });
+  window.addEventListener('keydown', unlockAudio, { passive: true });
+  window.addEventListener('click', unlockAudio, { passive: true });
+}
 
 // Reactive Shared State
 const voiceEnabled = ref<boolean>(
@@ -147,18 +193,44 @@ export function useAiVoice() {
     };
 
     audio.onerror = () => {
-      console.warn('[useAiVoice] /api/tts endpoint failed, fallback to Web Speech API');
+      console.warn('[useAiVoice] /api/tts endpoint failed');
       isSpeaking.value = false;
       isAudioPlaying = false;
       currentAudio = null;
-      speakWithSpeechSynthesis(cleanText, onEnd);
+      // CHỈ fallback sang Web Speech API NẾU máy có sẵn giọng Tiếng Việt thật!
+      // Tuyệt đối KHÔNG dùng giọng tiếng Anh (như Microsoft David) đọc tiếng Việt!
+      const viVoices = availableVoices.value.filter(
+        (v) =>
+          v.lang.toLowerCase().startsWith('vi') ||
+          v.name.toLowerCase().includes('vietnam') ||
+          v.name.toLowerCase().includes('vietnamese'),
+      );
+      if (viVoices.length > 0) {
+        speakWithSpeechSynthesis(cleanText, onEnd);
+      } else if (onEnd) {
+        onEnd();
+      }
     };
 
-    audio.play().catch(() => {
+    audio.play().catch((err) => {
+      console.warn('[useAiVoice] audio.play() blocked by browser autoplay policy or failed:', err);
       isSpeaking.value = false;
       isAudioPlaying = false;
       currentAudio = null;
-      speakWithSpeechSynthesis(cleanText, onEnd);
+      // Nếu bị chặn autoplay của trình duyệt do chưa click vào tab: tự động phát ngay khi click/chạm
+      if (err?.name === 'NotAllowedError') {
+        const unlockAndPlay = () => {
+          window.removeEventListener('pointerdown', unlockAndPlay);
+          window.removeEventListener('click', unlockAndPlay);
+          window.removeEventListener('keydown', unlockAndPlay);
+          playTtsAudio(cleanText, onEnd, speedMultiplier);
+        };
+        window.addEventListener('pointerdown', unlockAndPlay, { once: true });
+        window.addEventListener('click', unlockAndPlay, { once: true });
+        window.addEventListener('keydown', unlockAndPlay, { once: true });
+      } else if (onEnd) {
+        onEnd();
+      }
     });
   }
 
@@ -170,19 +242,28 @@ export function useAiVoice() {
 
     window.speechSynthesis.cancel();
 
-    const utter = new SpeechSynthesisUtterance(cleanText);
-    utter.volume = Math.max(0, Math.min(1, voiceVolume.value));
-    utter.lang = 'vi-VN';
-
-    let effRate = voiceRate.value;
-    let effPitch = voicePitch.value;
-
     const viVoices = availableVoices.value.filter(
       (v) =>
         v.lang.toLowerCase().startsWith('vi') ||
         v.name.toLowerCase().includes('vietnam') ||
         v.name.toLowerCase().includes('vietnamese'),
     );
+
+    // BẮT BUỘC: Nếu Windows/trình duyệt không có giọng Tiếng Việt, HỦY NGAY!
+    // Tránh việc trình duyệt tự động fallback sang Microsoft David đọc lơ lớ tiếng Anh!
+    if (viVoices.length === 0) {
+      console.warn('[useAiVoice] Hệ thống không có giọng Tiếng Việt cài sẵn, bỏ qua SpeechSynthesis.');
+      isSpeaking.value = false;
+      if (onEnd) onEnd();
+      return;
+    }
+
+    const utter = new SpeechSynthesisUtterance(cleanText);
+    utter.volume = Math.max(0, Math.min(1, voiceVolume.value));
+    utter.lang = 'vi-VN';
+
+    let effRate = voiceRate.value;
+    let effPitch = voicePitch.value;
 
     const femaleVi =
       viVoices.find(
@@ -247,10 +328,17 @@ export function useAiVoice() {
       return;
     }
 
-    stop();
-
     const cleanText = text.replace(/[*_#`]/g, '').trim();
     if (!cleanText) return;
+
+    // Chống vọng âm đa tab: nếu chính xác câu này vừa được phát trong vòng 2 giây qua ở bất kỳ tab nào, bỏ qua
+    if (isDuplicateSpeech(cleanText)) {
+      console.log('[useAiVoice] Đã có tab khác vừa đọc câu này, bỏ qua để chống vọng âm:', cleanText);
+      if (onEnd) onEnd();
+      return;
+    }
+
+    stop();
 
     const viVoices = availableVoices.value.filter(
       (v) =>
@@ -263,8 +351,9 @@ export function useAiVoice() {
     const isPreset = selectedVoiceURI.value.startsWith('preset-');
     const hasViSystemVoice = viVoices.length > 0;
 
-    // Nếu chọn Chị Google hoặc máy KHÔNG CÓ giọng tiếng Việt: dùng /api/tts để đảm bảo 100% tiếng Việt
-    if (isGoogleTts || (isPreset && !hasViSystemVoice)) {
+    // Nếu chọn Chị Google, chọn Preset, hoặc MÁY KHÔNG CÓ GIỌNG TIẾNG VIỆT HỆ THỐNG:
+    // BẮT BUỘC dùng /api/tts để luôn luôn đọc tiếng Việt chuẩn, không bao giờ im lặng!
+    if (!hasViSystemVoice || isGoogleTts || isPreset) {
       let speedMult = 1.0;
       if (selectedVoiceURI.value === 'preset-cute') speedMult = 1.15;
       else if (selectedVoiceURI.value === 'preset-fast') speedMult = 1.35;
@@ -288,7 +377,12 @@ export function useAiVoice() {
   }) {
     if (!voiceEnabled.value) return;
 
-    const num = typeof params.index === 'number' ? params.index + 1 : 1;
+    // params.index được truyền từ payload.questionIndex (đã là số thứ tự 1-based: 1, 2, 3...)
+    // Nếu index <= 0 (0-based) thì cộng 1, còn nếu >= 1 thì giữ nguyên chuẩn số câu
+    let num = 1;
+    if (typeof params.index === 'number') {
+      num = params.index > 0 ? params.index : params.index + 1;
+    }
     const script = `Câu số ${num}!`;
     speak(script);
   }

@@ -274,6 +274,19 @@ const roomCode = computed(() =>
   String(props.roomCodeProp || route.params.roomCode || 'KB2026').toUpperCase()
 );
 
+const isEmbedded = computed(() => {
+  if (props.embedded === true) return true;
+  if (typeof window !== 'undefined') {
+    const p = (window.location.pathname || '').toLowerCase();
+    if (p.includes('/dashboard') || p.includes('/admin')) return true;
+  }
+  if (route && typeof route.path === 'string') {
+    const p = route.path.toLowerCase();
+    if (p.includes('/dashboard') || p.includes('/admin')) return true;
+  }
+  return false;
+});
+
 let socket: Socket | null = null;
 const { calib, stageStyle, embeddedStyle, broadcastCalib, attachSocket, applyPreset, resetCalib } =
   useStageCalib(roomCode, () => socket);
@@ -378,7 +391,7 @@ function pushFeed(e: any) {
 function onEffect(e: any) {
   if (e.kind === 'JOIN' || e.kind === 'SYSTEM' || e.kind === 'GIFT') pushFeed(e);
   if (e.kind === 'GIFT') {
-    soundFX.playCorrectAnswer();
+    if (!isEmbedded.value) soundFX.playCorrectAnswer();
     if (e.tier === 'FREEZE' || e.tier === 'STORM' || e.tier === 'DOUBLE') {
       bigGift.value = { ...e, id: ++feedId };
       shaking.value = true;
@@ -389,7 +402,7 @@ function onEffect(e: any) {
     }
   }
   if (e.kind === 'WINNER') {
-    soundFX.playVictoryFanfare();
+    if (!isEmbedded.value) soundFX.playVictoryFanfare();
   }
 }
 
@@ -404,7 +417,7 @@ watch(
       text: `${rv.delta < 0 ? '🔴 Đỏ' : '🔵 Xanh'} kéo ${Math.abs(rv.delta)}!`,
     };
     shaking.value = true;
-    soundFX.playPullRope();
+    if (!isEmbedded.value) soundFX.playPullRope();
     setTimeout(() => (shaking.value = false), 600);
     setTimeout(() => (deltaFlash.value = null), 2200);
   }

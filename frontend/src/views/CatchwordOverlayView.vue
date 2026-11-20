@@ -216,6 +216,19 @@ const roomCode = computed(() =>
   String(props.roomCodeProp || route.params.roomCode || 'KB2026').toUpperCase()
 );
 
+const isEmbedded = computed(() => {
+  if (props.embedded === true) return true;
+  if (typeof window !== 'undefined') {
+    const p = (window.location.pathname || '').toLowerCase();
+    if (p.includes('/dashboard') || p.includes('/admin')) return true;
+  }
+  if (route && typeof route.path === 'string') {
+    const p = route.path.toLowerCase();
+    if (p.includes('/dashboard') || p.includes('/admin')) return true;
+  }
+  return false;
+});
+
 let socket: Socket | null = null;
 const { calib, stageStyle, broadcastCalib, attachSocket, applyPreset, resetCalib } = useStageCalib(
   roomCode,
@@ -263,6 +276,7 @@ function diffLabel(d?: string) {
 }
 
 function beep(freq = 660, dur = 0.12, type: OscillatorType = 'triangle', vol = 0.08) {
+  if (isEmbedded.value) return;
   try {
     audioCtx = audioCtx || new (window.AudioContext || (window as any).webkitAudioContext)();
     const o = audioCtx.createOscillator();
@@ -294,11 +308,11 @@ function onEffect(e: any) {
     pushFeed(e);
   }
   if (e.kind === 'SOLVED') {
-    soundFX.playCorrectAnswer();
+    if (!isEmbedded.value) soundFX.playCorrectAnswer();
   } else if (e.kind === 'FREE_HINT_UNLOCKED' || e.kind === 'HINT') {
-    soundFX.playRevealTile();
+    if (!isEmbedded.value) soundFX.playRevealTile();
   } else if (e.kind === 'GIFT') {
-    soundFX.playCorrectAnswer();
+    if (!isEmbedded.value) soundFX.playCorrectAnswer();
     if (e.tier !== 'LETTER') {
       bigGift.value = { ...e, id: ++feedId };
       shaking.value = true;
@@ -308,7 +322,7 @@ function onEffect(e: any) {
       }, 3200);
     }
   } else if (e.kind === 'WINNER') {
-    soundFX.playVictoryFanfare();
+    if (!isEmbedded.value) soundFX.playVictoryFanfare();
   }
 }
 

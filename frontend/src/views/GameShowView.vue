@@ -6,7 +6,7 @@
       {
         'layout-vertical': isVerticalLayout,
         'layout-landscape': !isVerticalLayout,
-        'is-embedded': embedded,
+        'is-embedded': isEmbedded,
       }
     ]"
   >
@@ -20,7 +20,7 @@
     <div ref="phaserContainer" class="phaser-canvas-layer"></div>
 
     <!-- Floating Quick Calibrator & Theme Toggle (chỉ hiện trên màn hình Game Show độc lập) -->
-    <div v-if="!embedded" class="calib-floating-widget" :class="{ 'calib-open': showCalibPanel }">
+    <div v-if="!isEmbedded" class="calib-floating-widget" :class="{ 'calib-open': showCalibPanel }">
       <div class="calib-top-actions">
         <!-- Cụm nút bật/tắt & tăng giảm nhanh Nhạc nền Lofi trên thanh nổi -->
         <div class="quick-audio-pill tabular-nums">
@@ -755,12 +755,25 @@ const roomCode = computed(() =>
   String(props.roomCodeProp || route.params.roomCode || 'KB2026').toUpperCase()
 );
 
+const isEmbedded = computed(() => {
+  if (props.embedded === true) return true;
+  if (typeof window !== 'undefined') {
+    const p = (window.location.pathname || '').toLowerCase();
+    if (p.includes('/dashboard') || p.includes('/admin')) return true;
+  }
+  if (route && typeof route.path === 'string') {
+    const p = route.path.toLowerCase();
+    if (p.includes('/dashboard') || p.includes('/admin')) return true;
+  }
+  return false;
+});
+
 const isVerticalLayout = ref(
   Boolean(
     props.forceVertical ||
       route.query.layout === 'vertical' ||
       (typeof window !== 'undefined' &&
-        !props.embedded &&
+        !isEmbedded.value &&
         (window.innerWidth <= 960 || window.innerHeight >= window.innerWidth * 0.85))
   )
 );
@@ -960,7 +973,7 @@ function onManualCalibChange() {
 }
 
 function recalcAutoFit() {
-  if (props.embedded || !broadcastFrameRef.value || typeof window === 'undefined') {
+  if (isEmbedded.value || !broadcastFrameRef.value || typeof window === 'undefined') {
     autoFitScale.value = 1;
     return;
   }
@@ -989,7 +1002,7 @@ function recalcAutoFit() {
 }
 
 const broadcastFrameStyle = computed(() => {
-  if (props.embedded) return {};
+  if (isEmbedded.value) return {};
 
   const effectiveScale = (layoutCalib.value.scale / 100) * autoFitScale.value;
   const ox = layoutCalib.value.offsetX || 0;
@@ -1218,20 +1231,24 @@ function resolveAvatarSrc(entry: any): string {
 }
 
 function syncSoundEngine() {
-  // Nếu là khung preview nhúng nhỏ trong Dashboard thì tắt tiếng mặc định để tránh vọng âm với tab OBS
-  const effectiveMuted = props.embedded ? true : isSoundMuted.value;
+  // Nếu là khung preview nhúng nhỏ trong Dashboard thì tắt tiếng tuyệt đối để tránh vọng âm với tab OBS/User
+  const effectiveMuted = isEmbedded.value ? true : isSoundMuted.value;
   soundFX.setMuted(effectiveMuted);
-  soundFX.setBgmEnabled(bgmEnabled.value);
-  soundFX.setBgmVolume(bgmVolume.value);
-  soundFX.setSfxVolume(sfxVolume.value);
-  soundFX.setLofiStyle(lofiStyle.value);
-  soundFX.syncBgmPlaybackState();
+  if (isEmbedded.value) {
+    soundFX.stopBgm();
+  } else {
+    soundFX.setBgmEnabled(bgmEnabled.value);
+    soundFX.setBgmVolume(bgmVolume.value);
+    soundFX.setSfxVolume(sfxVolume.value);
+    soundFX.setLofiStyle(lofiStyle.value);
+    soundFX.syncBgmPlaybackState();
+  }
 }
 
 function saveAudioPrefs(broadcast = true) {
   if (typeof window !== 'undefined') {
     try {
-      const key = props.embedded ? 'kb_sound_muted_embed' : 'kb_sound_muted_obs';
+      const key = isEmbedded.value ? 'kb_sound_muted_embed' : 'kb_sound_muted_obs';
       window.localStorage.setItem(key, isSoundMuted.value ? '1' : '0');
       window.localStorage.setItem(
         STORAGE_AUDIO_KEY,
@@ -1261,12 +1278,12 @@ function saveAudioPrefs(broadcast = true) {
 function loadSavedSoundPref() {
   if (typeof window === 'undefined') return;
   try {
-    const key = props.embedded ? 'kb_sound_muted_embed' : 'kb_sound_muted_obs';
+    const key = isEmbedded.value ? 'kb_sound_muted_embed' : 'kb_sound_muted_obs';
     const savedMute = window.localStorage.getItem(key);
     if (savedMute !== null) {
       isSoundMuted.value = savedMute === '1';
     } else {
-      isSoundMuted.value = Boolean(props.embedded);
+      isSoundMuted.value = Boolean(isEmbedded.value);
     }
 
     const rawAudio = window.localStorage.getItem(STORAGE_AUDIO_KEY);
@@ -1539,16 +1556,14 @@ onMounted(async () => {
     answeredPlayers.value = [];
     if (initialSec > 0) {
       lastTickSoundKey = `${payload.questionId || payload.questionIndex || ''}:${initialSec}`;
-      if (!isSoundMuted.value) {
+      if (!isEmbedded.value && !isSoundMuted.value) {
         soundFX.playCountdownTick(initialSec);
       }
     }
-    // Giọng đọc MC Ảo AI đọc số câu hỏi trên màn hình LIVE OBS
-    if (!props.embedded) {
-      aiVoice.speakQuestion({
-        index: payload.questionIndex,
-      });
-    }
+    // Giọng đọc MC Ảo AI đọc số câu hỏi (có cơ chế chống trùng đa tab tự động)
+    aiVoice.speakQuestion({
+      index: payload.questionIndex,
+    });
     requestAnimationFrame(recalcAutoFit);
   });
 
@@ -1559,7 +1574,7 @@ onMounted(async () => {
       const tickKey = `${payload.questionId || payload.questionIndex || ''}:${nextSec}`;
       if (tickKey !== lastTickSoundKey) {
         lastTickSoundKey = tickKey;
-        if (!isSoundMuted.value) {
+        if (!isEmbedded.value && !isSoundMuted.value) {
           soundFX.playCountdownTick(nextSec);
         }
       }
@@ -1578,19 +1593,17 @@ onMounted(async () => {
     questionResult.value = payload;
     if (isFirstRevealForQuestion) {
       lastResultSoundQuestionId = String(payload?.questionId || '');
-      if (!isSoundMuted.value && Number(payload?.correctPlayersCount || 0) > 0) {
+      if (!isEmbedded.value && !isSoundMuted.value && Number(payload?.correctPlayersCount || 0) > 0) {
         soundFX.playCorrectAnswer();
       }
-      // Giọng đọc MC Ảo AI đọc đáp án đúng, số người đúng và tên người nhanh nhất
-      if (!props.embedded) {
-        const fastestName = payload.fastestPlayers?.[0]?.nickname || payload.fastestPlayers?.[0]?.username;
-        aiVoice.speakResult({
-          correctOption: payload.correctOption,
-          correctContent: payload.options?.[payload.correctOption],
-          correctCount: payload.correctPlayersCount,
-          fastestPlayerName: fastestName,
-        });
-      }
+      // Giọng đọc MC Ảo AI đọc đáp án đúng, số người đúng và tên người nhanh nhất (có cơ chế chống trùng đa tab tự động)
+      const fastestName = payload.fastestPlayers?.[0]?.nickname || payload.fastestPlayers?.[0]?.username;
+      aiVoice.speakResult({
+        correctOption: payload.correctOption,
+        correctContent: payload.options?.[payload.correctOption],
+        correctCount: payload.correctPlayersCount,
+        fastestPlayerName: fastestName,
+      });
       requestAnimationFrame(recalcAutoFit);
     }
   });
@@ -1602,7 +1615,7 @@ onMounted(async () => {
   socket.on('game.finished', (payload) => {
     if (payload.leaderboard) {
       leaderboard.value = payload.leaderboard;
-      if (!props.embedded && payload.leaderboard.length > 0) {
+      if (payload.leaderboard.length > 0) {
         const champ = payload.leaderboard[0];
         aiVoice.speakWinner({
           nickname: champ.nickname || champ.username || 'Quán quân',
@@ -1673,7 +1686,7 @@ onBeforeUnmount(() => {
     clearInterval(victoryCountdownTimer);
     victoryCountdownTimer = null;
   }
-  if (!props.embedded) {
+  if (!isEmbedded.value) {
     soundFX.stopBgm();
     aiVoice.stop();
   }
