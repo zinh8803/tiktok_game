@@ -38,6 +38,12 @@ export interface ActiveRoomRuntime {
     username: string;
   }>;
   eliminatedHintOption: OptionLabel | null;
+  eliminatedOptions: OptionLabel[];
+  heartCountPhase: number;
+  totalLikesReceived: number;
+  isDoublePoints: boolean;
+  goldenQuestionActive: boolean;
+  lastLikeProgressBroadcastAt?: number;
   playersMap: Map<string, { id: string; username: string; nickname: string; avatarUrl?: string }>;
   sessionPlayersCache: Map<
     string,
@@ -133,6 +139,11 @@ export class GameEngineService {
       answeredCountCurrentQuestion: 0,
       answeredPlayersCurrentQuestion: [],
       eliminatedHintOption: null,
+      eliminatedOptions: [],
+      heartCountPhase: 0,
+      totalLikesReceived: 0,
+      isDoublePoints: false,
+      goldenQuestionActive: false,
       playersMap: new Map(),
       sessionPlayersCache: new Map(),
       leaderboard: [],
@@ -280,6 +291,14 @@ export class GameEngineService {
       answeredCountCurrentQuestion: runtime.answeredCountCurrentQuestion,
       answeredPlayersCurrentQuestion: runtime.answeredPlayersCurrentQuestion.slice(-30),
       eliminatedHintOption: runtime.eliminatedHintOption,
+      eliminatedOptions: runtime.eliminatedOptions,
+      heartProgress: {
+        current: runtime.heartCountPhase,
+        target: 500,
+        total: runtime.totalLikesReceived,
+      },
+      isDoublePoints: runtime.isDoublePoints,
+      goldenQuestionActive: runtime.goldenQuestionActive,
       autoCrowd: {
         enabled: runtime.autoCrowdEnabled,
         minPlayers: runtime.autoCrowdMin,
@@ -320,6 +339,9 @@ export class GameEngineService {
         endsAt: runtime.questionEndsAt,
         answeredCount: runtime.answeredCountCurrentQuestion,
         eliminatedHintOption: runtime.eliminatedHintOption,
+        eliminatedOptions: runtime.eliminatedOptions,
+        isDoublePoints: runtime.isDoublePoints,
+        goldenQuestionActive: runtime.goldenQuestionActive,
       };
 
       // Bản dành riêng cho Streamer Dashboard / Admin có sẵn đáp án đúng
@@ -385,6 +407,11 @@ export class GameEngineService {
     runtime.answeredCountCurrentQuestion = 0;
     runtime.answeredPlayersCurrentQuestion = [];
     runtime.eliminatedHintOption = null;
+    runtime.eliminatedOptions = [];
+    runtime.heartCountPhase = 0;
+    runtime.totalLikesReceived = 0;
+    runtime.isDoublePoints = false;
+    runtime.goldenQuestionActive = false;
     runtime.lastQuestionResult = null;
     runtime.gameFinishedPayload = null;
     runtime.leaderboard = [];
@@ -442,6 +469,33 @@ export class GameEngineService {
     runtime.answeredCountCurrentQuestion = 0;
     runtime.answeredPlayersCurrentQuestion = [];
     runtime.eliminatedHintOption = null;
+    runtime.eliminatedOptions = [];
+    // KHÔNG reset runtime.heartCountPhase về 0 - Giữ nguyên số tim tích lũy cộng dồn qua các câu hỏi
+    if (runtime.goldenQuestionActive) {
+      runtime.isDoublePoints = true;
+      runtime.goldenQuestionActive = false;
+    } else {
+      runtime.isDoublePoints = false;
+    }
+
+    // Nếu số tim tích lũy dồn từ câu trước đã đủ từ 500 tim trở lên, tự động kích hoạt quyền lợi cho câu mới
+    while (runtime.heartCountPhase >= 500 && runtime.eliminatedOptions.length < 2) {
+      const availableWrong = (['A', 'B', 'C', 'D'] as OptionLabel[]).filter(
+        (opt) => opt !== q.correctOption && !runtime.eliminatedOptions.includes(opt)
+      );
+      if (availableWrong.length > 0) {
+        const eliminated = availableWrong[Math.floor(Math.random() * availableWrong.length)];
+        runtime.eliminatedOptions.push(eliminated);
+        runtime.eliminatedHintOption = eliminated;
+        runtime.heartCountPhase -= 500;
+        if (runtime.eliminatedOptions.length === 2) {
+          runtime.isDoublePoints = true;
+        }
+      } else {
+        break;
+      }
+    }
+
     runtime.lastQuestionResult = null;
 
     if (runtime.sessionId) {
@@ -465,6 +519,8 @@ export class GameEngineService {
       },
       duration: durationSec,
       endsAt: runtime.questionEndsAt,
+      eliminatedOptions: runtime.eliminatedOptions,
+      isDoublePoints: runtime.isDoublePoints,
     };
 
     // Bản dành riêng cho Dashboard Streamer / Admin (chứa đáp án đúng để MC biết trước khi live)
@@ -529,11 +585,13 @@ export class GameEngineService {
     runtime.phase = 'ANSWER_REVEAL';
 
     const q = runtime.questions[runtime.currentQuestionIndex];
+    const pointMultiplier = runtime.isDoublePoints ? 2 : 1;
     const gradeStats = this.db.gradeQuestionInTransaction({
       sessionId: runtime.sessionId,
       questionId: q.questionId,
       correctOption: q.correctOption,
       timeLimitSec: q.timeLimit,
+      pointMultiplier,
     });
 
     const leaderboard = this.db.getSessionLeaderboard(
@@ -706,6 +764,11 @@ export class GameEngineService {
     runtime.answeredCountCurrentQuestion = 0;
     runtime.answeredPlayersCurrentQuestion = [];
     runtime.eliminatedHintOption = null;
+    runtime.eliminatedOptions = [];
+    runtime.heartCountPhase = 0;
+    runtime.totalLikesReceived = 0;
+    runtime.isDoublePoints = false;
+    runtime.goldenQuestionActive = false;
     runtime.lastQuestionResult = null;
     runtime.gameFinishedPayload = null;
     runtime.leaderboard = [];
@@ -1086,10 +1149,184 @@ export class GameEngineService {
 
     this.realtime.emitToRoom(runtime.roomCode, 'gift.animation', animationPayload);
     if (sharedHintEliminated) {
+      if (!runtime.eliminatedOptions.includes(sharedHintEliminated)) {
+        runtime.eliminatedOptions.push(sharedHintEliminated);
+      }
       this.scheduleCoalescedBroadcast(runtime, { roomState: true });
     }
 
     return animationPayload;
+  }
+
+  /**
+   * Xử lý sự kiện Thả Tim (LIKE) từ TikTok LIVE:
+   * 1. Tích lũy đủ 500 tim/lần khi QUESTION: loại trừ 1 đáp án sai
+   * 2. Tích lũy đủ 1000 tim khi QUESTION: loại tiếp đáp án sai thứ 2 (chế độ 50/50) và x2 ĐIỂM SỐ câu hiện tại
+   * 3. Khi đang chuyển câu (ANSWER_REVEAL / LEADERBOARD):
+   *    - 500 tim: Bỏ qua đếm ngược chờ đợi, chuyển sang câu hỏi tiếp theo ngay lập tức!
+   *    - 1000 tim: Bật cờ CÂU HỎI VÀNG (x2 Điểm) cho câu kế tiếp!
+   * 4. Khi đang ở sảnh chờ (WAITING_ROOM):
+   *    - 500 tim: Kích hoạt đếm ngược bắt đầu trận đấu luôn!
+   */
+  public handleLikeEvent(event: GameEvent) {
+    const runtime = this.getOrCreateRuntime(event.roomId);
+    const likeCount = Math.max(1, Number(event.payload.likeCount || 1));
+
+    runtime.totalLikesReceived += likeCount;
+    runtime.heartCountPhase += likeCount;
+
+    // Throttle emitting like.progress (tối đa 1 lần mỗi 400ms) để UI mượt mà không nghẽn socket
+    const now = Date.now();
+    if (!runtime.lastLikeProgressBroadcastAt || now - runtime.lastLikeProgressBroadcastAt >= 400) {
+      runtime.lastLikeProgressBroadcastAt = now;
+      this.realtime.emitToRoom(runtime.roomCode, 'like.progress', {
+        current: runtime.heartCountPhase,
+        target: 500,
+        total: runtime.totalLikesReceived,
+        phase: runtime.phase,
+      });
+    }
+
+    // --- KỊCH BẢN 1: SẢNH CHỜ (WAITING_ROOM / COUNTDOWN) ---
+    // 500 tim: Kích hoạt bắt đầu trận đấu luôn!
+    if ((runtime.status === 'WAITING' || runtime.phase === 'WAITING_ROOM') && runtime.heartCountPhase >= 500) {
+      runtime.heartCountPhase -= 500;
+      this.realtime.emitToRoom(runtime.roomCode, 'like.milestone', {
+        type: 'START_MATCH',
+        message: '💖 ĐẠT 500 TIM TÍCH LŨY! BẮT ĐẦU TRẬN ĐẤU NGAY LẬP TỨC!',
+        totalLikes: runtime.totalLikesReceived,
+      });
+      this.pushRecentEvent(runtime, {
+        id: event.id,
+        type: 'LIKE',
+        nickname: event.user.nickname,
+        username: event.user.username,
+        summary: 'thả tim đạt mốc 500 - Kích hoạt bắt đầu trận đấu!',
+      });
+      try {
+        this.startMatch(runtime.roomCode);
+      } catch (err: any) {
+        this.logger.warn(`Failed to auto-start match on 500 likes: ${err?.message}`);
+      }
+      return { action: 'START_MATCH_ON_500_LIKES' };
+    }
+
+    // --- KỊCH BẢN 2: ĐANG TRONG CÂU HỎI (QUESTION & isQuestionOpen) ---
+    // 500 tim lần 1: Loại 1 đáp án sai (trừ 500 tim, số dư còn lại tiếp tục dồn)
+    // 500 tim lần 2: Loại tiếp đáp án sai thứ 2 (chế độ 50/50) VÀ x2 Điểm câu hiện tại!
+    if (runtime.status === 'PLAYING' && runtime.phase === 'QUESTION' && runtime.isQuestionOpen) {
+      const q = runtime.questions[runtime.currentQuestionIndex];
+      if (q) {
+        // Mốc 1: Chưa loại đáp án nào và tim >= 500 -> Loại 1 đáp án sai, trừ 500 tim
+        if (runtime.heartCountPhase >= 500 && runtime.eliminatedOptions.length < 1) {
+          const availableWrong = (['A', 'B', 'C', 'D'] as OptionLabel[]).filter(
+            (opt) => opt !== q.correctOption && !runtime.eliminatedOptions.includes(opt)
+          );
+          if (availableWrong.length > 0) {
+            const firstEliminated = availableWrong[Math.floor(Math.random() * availableWrong.length)];
+            runtime.eliminatedOptions.push(firstEliminated);
+            runtime.eliminatedHintOption = firstEliminated;
+            runtime.heartCountPhase -= 500;
+
+            this.realtime.emitToRoom(runtime.roomCode, 'like.milestone', {
+              type: 'ELIMINATE_WRONG',
+              message: `💖 ĐẠT 500 TIM! ĐÃ LOẠI TRỪ ĐÁP ÁN SAI: [ ${firstEliminated} ]!`,
+              eliminated: firstEliminated,
+              eliminatedOptions: runtime.eliminatedOptions,
+              totalLikes: runtime.totalLikesReceived,
+            });
+
+            this.pushRecentEvent(runtime, {
+              id: event.id,
+              type: 'LIKE',
+              nickname: event.user.nickname,
+              username: event.user.username,
+              summary: `thả tim đạt mốc 500 - Đã loại trừ đáp án sai ${firstEliminated}!`,
+            });
+
+            this.scheduleCoalescedBroadcast(runtime, { roomState: true });
+            return { action: 'ELIMINATE_1_WRONG_ON_500_LIKES', eliminated: firstEliminated };
+          }
+        }
+
+        // Mốc 2: Đã loại 1 đáp án và tim lại tích lũy đủ tiếp 500 tim nữa -> Loại đáp án thứ 2 (50/50) & x2 điểm
+        if (runtime.heartCountPhase >= 500 && runtime.eliminatedOptions.length === 1) {
+          const availableWrong = (['A', 'B', 'C', 'D'] as OptionLabel[]).filter(
+            (opt) => opt !== q.correctOption && !runtime.eliminatedOptions.includes(opt)
+          );
+          if (availableWrong.length > 0) {
+            const secondEliminated = availableWrong[Math.floor(Math.random() * availableWrong.length)];
+            runtime.eliminatedOptions.push(secondEliminated);
+            runtime.eliminatedHintOption = secondEliminated;
+            runtime.isDoublePoints = true;
+            runtime.heartCountPhase -= 500;
+
+            this.realtime.emitToRoom(runtime.roomCode, 'like.milestone', {
+              type: '50_50_DOUBLE',
+              message: '🔥 ĐẠT TIẾP 500 TIM! CHẾ ĐỘ 50/50 & NHÂN ĐÔI ĐIỂM SỐ KÍCH HOẠT!',
+              eliminatedOptions: runtime.eliminatedOptions,
+              isDoublePoints: true,
+              totalLikes: runtime.totalLikesReceived,
+            });
+
+            this.pushRecentEvent(runtime, {
+              id: event.id,
+              type: 'LIKE',
+              nickname: event.user.nickname,
+              username: event.user.username,
+              summary: `thả tim tích lũy đủ - Kích hoạt 50/50 (loại ${runtime.eliminatedOptions.join(', ')}) & x2 điểm!`,
+            });
+
+            this.scheduleCoalescedBroadcast(runtime, { roomState: true });
+            return { action: 'ACTIVATE_50_50_DOUBLE' };
+          }
+        }
+      }
+    }
+
+    // --- KỊCH BẢN 3: ĐANG CHUYỂN CÂU (ANSWER_REVEAL / LEADERBOARD) ---
+    // 500 tim: Bỏ qua đếm ngược chờ đợi, chuyển sang câu hỏi tiếp theo ngay lập tức!
+    // 1000 tim: Kích hoạt CÂU HỎI VÀNG (x2 Điểm) cho câu kế tiếp!
+    if (runtime.status === 'PLAYING' && (runtime.phase === 'ANSWER_REVEAL' || runtime.phase === 'LEADERBOARD')) {
+      if (runtime.heartCountPhase >= 500) {
+        if (runtime.phaseTimeout) {
+          clearTimeout(runtime.phaseTimeout);
+          runtime.phaseTimeout = undefined;
+        }
+
+        const isGolden = runtime.heartCountPhase >= 1000;
+        if (isGolden) {
+          runtime.goldenQuestionActive = true;
+          runtime.heartCountPhase -= 1000;
+        } else {
+          runtime.heartCountPhase -= 500;
+        }
+
+        this.realtime.emitToRoom(runtime.roomCode, 'like.milestone', {
+          type: 'SKIP_TRANSITION',
+          message: isGolden
+            ? '✨ ĐẠT 1.000 TIM! CHUYỂN CÂU NGAY & KÍCH HOẠT CÂU HỎI VÀNG (x2 ĐIỂM)!'
+            : '⚡ ĐẠT 500 TIM! BỎ QUA CHỜ ĐỢI, VÀO CÂU KẾ TIẾP NGAY LẬP TỨC!',
+          goldenQuestion: isGolden,
+          totalLikes: runtime.totalLikesReceived,
+        });
+
+        this.pushRecentEvent(runtime, {
+          id: event.id,
+          type: 'LIKE',
+          nickname: event.user.nickname,
+          username: event.user.username,
+          summary: isGolden
+            ? 'thả tim đạt 1.000 - Chuyển câu tức thì & bật CÂU HỎI VÀNG (x2 điểm)!'
+            : 'thả tim đạt 500 - Bỏ qua thời gian chờ, vào câu tiếp theo!',
+        });
+
+        this.nextStep(runtime.roomCode);
+        return { action: 'SKIP_TRANSITION_ON_LIKES', goldenQuestion: isGolden };
+      }
+    }
+
+    return { action: 'LIKE_ACCUMULATED', current: runtime.heartCountPhase };
   }
 
   // =====================================================================

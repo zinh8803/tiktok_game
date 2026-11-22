@@ -117,7 +117,7 @@ export class EventProcessorService {
       };
     }
 
-    if (event.type !== 'JOIN') {
+    if (event.type !== 'JOIN' && event.type !== 'LIKE') {
       const isUniqueInDb = this.db.recordLiveEventIfUnique({
         id: event.id,
         roomId: event.roomId,
@@ -216,6 +216,16 @@ export class EventProcessorService {
         processed: true,
         eventId: event.id,
         ...engineResult,
+      };
+    }
+
+    if (event.type === 'LIKE') {
+      const likeResult = this.gameEngine.handleLikeEvent(event);
+      return {
+        processed: true,
+        eventId: event.id,
+        action: 'LIKE_PROCESSED',
+        likeResult,
       };
     }
 

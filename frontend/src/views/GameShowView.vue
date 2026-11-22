@@ -177,6 +177,70 @@
               </button>
             </div>
           </div>
+
+          <!-- MC ẢO AI ĐỌC CÂU HỎI & KẾT QUẢ -->
+          <div class="calib-popup-header" style="margin-top: 0.85rem; padding-top: 0.75rem; border-top: 1px dashed rgba(255, 255, 255, 0.15);">
+            <strong>🎙️ MC Ảo AI Đọc Tự Động</strong>
+            <button
+              type="button"
+              class="lofi-power-btn"
+              :class="{ active: aiVoice.settings.enabled }"
+              @click="aiVoice.settings.enabled = !aiVoice.settings.enabled"
+            >
+              {{ aiVoice.settings.enabled ? '🟢 Đang Bật' : '⚪ Đang Tắt' }}
+            </button>
+          </div>
+
+          <div v-if="aiVoice.settings.enabled" class="ai-voice-calib-body">
+            <div class="calib-slider-group">
+              <label>
+                <span>🗣️ Giọng đọc tiếng Việt</span>
+              </label>
+              <select
+                v-model="aiVoice.settings.voiceURI"
+                class="input-control"
+                style="width: 100%; font-size: 0.78rem; padding: 0.35rem 0.5rem; background: rgba(15, 23, 42, 0.9); color: #fff; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px;"
+              >
+                <option v-for="v in aiVoice.vietnameseVoices.value" :key="v.voiceURI" :value="v.voiceURI">
+                  {{ v.name }}
+                </option>
+              </select>
+            </div>
+
+            <div class="calib-slider-group" style="margin-top: 0.5rem;">
+              <label>
+                <span>⚡ Tốc độ đọc</span>
+                <strong>{{ aiVoice.settings.rate }}x</strong>
+              </label>
+              <input
+                v-model.number="aiVoice.settings.rate"
+                type="range"
+                min="0.8"
+                max="1.5"
+                step="0.05"
+              />
+            </div>
+
+            <div style="display: flex; gap: 0.5rem; margin-top: 0.6rem;">
+              <button
+                type="button"
+                class="btn btn-secondary"
+                style="flex: 1; font-size: 0.75rem; padding: 0.35rem 0.6rem; border-radius: 6px; justify-content: center;"
+                @click="aiVoice.testVoice"
+              >
+                🎤 Thử giọng đọc
+              </button>
+              <button
+                v-if="aiVoice.isSpeaking.value"
+                type="button"
+                class="btn btn-purple"
+                style="font-size: 0.75rem; padding: 0.35rem 0.6rem; border-radius: 6px;"
+                @click="aiVoice.stop"
+              >
+                ⏹ Dừng
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- BỘ CHỌN THEME PHONG CÁCH -->
@@ -382,15 +446,39 @@
         </div>
 
         <div class="header-metrics tabular-nums">
+          <!-- Thanh tim tích lũy (Heart Goal Pill) -->
+          <div
+            class="heart-goal-pill"
+            :class="{ 'heart-milestone-ready': heartProgress.current >= 500 }"
+            :title="heartGoalLabel"
+          >
+            <span class="heart-pulse-emoji">💖</span>
+            <div class="heart-pill-info">
+              <span class="heart-pill-count">{{ (heartProgress.current % 500 === 0 && heartProgress.current > 0) ? 500 : (heartProgress.current % 500) }}/500</span>
+              <span class="heart-pill-label">{{ heartGoalShortLabel }}</span>
+            </div>
+            <div class="heart-pill-track">
+              <div class="heart-pill-fill" :style="{ width: `${heartPercent}%` }"></div>
+            </div>
+          </div>
+
           <div v-if="!activeGiftBanner" class="metric-pill">
             <Users :size="14" />
-            <span>{{ roomState?.playerCount || 0 }} người chơi</span>
+            <span>{{ roomState?.playerCount || 0 }}</span>
           </div>
           <div v-if="roomState?.status === 'PLAYING'" class="metric-pill badge-cyan">
             <span>Câu {{ currentQuestionNumber }}/{{ totalQuestionsCount }}</span>
           </div>
         </div>
       </header>
+
+      <!-- Like Milestone Pop Banner -->
+      <transition name="pop-milestone">
+        <div v-if="likeMilestoneBanner" class="like-milestone-popup">
+          <span class="milestone-pulse-icon">🔥</span>
+          <span class="milestone-msg">{{ likeMilestoneBanner.message }}</span>
+        </div>
+      </transition>
 
       <!-- Main Stage Content Grid -->
       <main class="stage-grid">
@@ -422,14 +510,14 @@
               <div class="rule-item">
                 <CheckCircle2 :size="18" class="icon-cyan" />
                 <div>
-                  <strong>+100 điểm cơ bản</strong>
+                  <strong>+100 điểm</strong>
                   <p>Trả lời chính xác</p>
                 </div>
               </div>
               <div class="rule-item">
                 <Zap :size="18" class="icon-gold" />
                 <div>
-                  <strong>+0–50 điểm tốc độ</strong>
+                  <strong>+0–50 tốc độ</strong>
                   <p>Phản xạ càng nhanh</p>
                 </div>
               </div>
@@ -438,6 +526,13 @@
                 <div>
                   <strong>Tính đáp án đầu</strong>
                   <p>Chống đổi đáp án</p>
+                </div>
+              </div>
+              <div class="rule-item rule-item-heart">
+                <span class="rule-heart-icon">💖</span>
+                <div>
+                  <strong>Thả 500 tim</strong>
+                  <p>Bắt đầu ngay ({{ (heartProgress.current % 500 === 0 && heartProgress.current > 0) ? 500 : (heartProgress.current % 500) }}/500)</p>
                 </div>
               </div>
             </div>
@@ -475,8 +570,11 @@
               <div class="question-meta-badges">
                 <span class="badge badge-cyan">{{ activeQuestion.categoryName || 'Kiến thức' }}</span>
                 <span class="badge badge-purple">{{ formatDifficulty(activeQuestion.difficulty) }}</span>
-                <span v-if="eliminatedOption" class="badge badge-gold">
-                  Loại: {{ eliminatedOption }}
+                <span v-if="eliminatedOptions.length > 0" class="badge badge-gold">
+                  Loại: {{ eliminatedOptions.join(', ') }}
+                </span>
+                <span v-if="isDoublePoints" class="badge badge-amber animate-pulse">
+                  ⚡ x2 ĐIỂM
                 </span>
               </div>
 
@@ -515,14 +613,14 @@
                 class="option-card"
                 :class="[
                   `option-card-${label.toLowerCase()}`,
-                  { 'option-eliminated': eliminatedOption === label },
+                  { 'option-eliminated': isOptionEliminated(label) },
                 ]"
               >
                 <div class="option-key">{{ label }}</div>
                 <div class="option-text">
                   {{ activeQuestion.options?.[label] }}
                 </div>
-                <span v-if="eliminatedOption === label" class="eliminated-tag">LOẠI</span>
+                <span v-if="isOptionEliminated(label)" class="eliminated-tag">LOẠI</span>
               </div>
             </div>
           </div>
@@ -1110,6 +1208,17 @@ const remainingSeconds = ref<number>(15);
 const answeredCount = ref<number>(0);
 const answeredPlayers = ref<Array<{ playerId: string; nickname: string; username: string }>>([]);
 const activeGiftBanner = ref<any>(null);
+const heartProgress = ref({
+  current: 0,
+  target: 500,
+  total: 0,
+});
+const likeMilestoneBanner = ref<{
+  type: string;
+  message: string;
+  totalLikes?: number;
+} | null>(null);
+let likeMilestoneTimeout: any = null;
 const isSoundMuted = ref<boolean>(Boolean(props.embedded));
 const bgmEnabled = ref<boolean>(true);
 const bgmVolume = ref<number>(40);
@@ -1394,6 +1503,59 @@ const eliminatedOption = computed(() => {
   return roomState.value?.eliminatedHintOption || activeQuestion.value?.eliminatedHintOption || null;
 });
 
+const eliminatedOptions = computed<string[]>(() => {
+  const fromState = roomState.value?.eliminatedOptions;
+  if (Array.isArray(fromState) && fromState.length > 0) return fromState;
+  const fromActiveQ = activeQuestion.value?.eliminatedOptions;
+  if (Array.isArray(fromActiveQ) && fromActiveQ.length > 0) return fromActiveQ;
+  const single = roomState.value?.eliminatedHintOption || activeQuestion.value?.eliminatedHintOption;
+  return single ? [single] : [];
+});
+
+const isDoublePoints = computed<boolean>(() => {
+  return !!(roomState.value?.isDoublePoints || activeQuestion.value?.isDoublePoints);
+});
+
+const isOptionEliminated = (label: string) => {
+  return eliminatedOptions.value.includes(label);
+};
+
+const heartGoalShortLabel = computed(() => {
+  if (currentPhase.value === 'QUESTION') {
+    return eliminatedOptions.value.length >= 1 ? '50/50 & x2' : 'Loại 1 đáp án';
+  }
+  if (currentPhase.value === 'ANSWER_REVEAL' || currentPhase.value === 'LEADERBOARD') {
+    return 'Chuyển câu';
+  }
+  if (currentPhase.value === 'WAITING_ROOM') {
+    return 'Bắt đầu';
+  }
+  return 'Thả tim';
+});
+
+const heartGoalLabel = computed(() => {
+  if (currentPhase.value === 'QUESTION') {
+    if (eliminatedOptions.value.length >= 1) {
+      return '500 tim tiếp theo: Chế độ 50/50 & x2 Điểm số!';
+    }
+    return '500 tim: Loại trừ 1 đáp án sai!';
+  }
+  if (currentPhase.value === 'ANSWER_REVEAL' || currentPhase.value === 'LEADERBOARD') {
+    return '500 tim: Chuyển câu tức thì! (1.000 tim: Câu Hỏi Vàng x2)';
+  }
+  if (currentPhase.value === 'WAITING_ROOM') {
+    return '500 tim: Bắt đầu trận đấu luôn!';
+  }
+  return 'Thả tim tương tác';
+});
+
+const heartPercent = computed(() => {
+  const cur = heartProgress.value.current || 0;
+  const rem = cur % 500;
+  if (rem === 0 && cur > 0) return 100;
+  return Math.min(100, Math.max(0, Math.round((rem / 500) * 100)));
+});
+
 const timerProgressPercent = computed(() => {
   const duration = activeQuestion.value?.duration || 15;
   return Math.max(0, Math.min(100, (remainingSeconds.value / duration) * 100));
@@ -1483,6 +1645,9 @@ async function loadInitialRecovery() {
     const data = await api.getRoom(roomCode.value);
     if (data.roomState) {
       roomState.value = data.roomState;
+      if (data.roomState.heartProgress) {
+        heartProgress.value = data.roomState.heartProgress;
+      }
       recentFeed.value = data.roomState.recentEvents || [];
       answeredCount.value = data.roomState.answeredCountCurrentQuestion || 0;
       answeredPlayers.value = data.roomState.answeredPlayersCurrentQuestion || [];
@@ -1535,6 +1700,9 @@ onMounted(async () => {
   socket.on('room.state', (payload) => {
     const prevPhase = roomState.value?.phase;
     roomState.value = payload;
+    if (payload.heartProgress) {
+      heartProgress.value = payload.heartProgress;
+    }
     if (payload.recentEvents) {
       recentFeed.value = payload.recentEvents;
     }
@@ -1545,6 +1713,25 @@ onMounted(async () => {
     if (prevPhase !== payload.phase) {
       requestAnimationFrame(recalcAutoFit);
     }
+  });
+
+  socket.on('like.progress', (payload) => {
+    heartProgress.value = {
+      current: payload.current || 0,
+      target: payload.target || 500,
+      total: payload.total || 0,
+    };
+  });
+
+  socket.on('like.milestone', (payload) => {
+    likeMilestoneBanner.value = payload;
+    if (!isEmbedded.value && !isSoundMuted.value) {
+      soundFX.playStartMatch();
+    }
+    if (likeMilestoneTimeout) clearTimeout(likeMilestoneTimeout);
+    likeMilestoneTimeout = setTimeout(() => {
+      likeMilestoneBanner.value = null;
+    }, 4500);
   });
 
   socket.on('question.started', (payload) => {
@@ -1682,6 +1869,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('storage', handleStorageSync);
   frameResizeObserver?.disconnect();
   if (giftTimeout) clearTimeout(giftTimeout);
+  if (likeMilestoneTimeout) clearTimeout(likeMilestoneTimeout);
   if (victoryCountdownTimer) {
     clearInterval(victoryCountdownTimer);
     victoryCountdownTimer = null;
@@ -1799,6 +1987,16 @@ onBeforeUnmount(() => {
 .layout-vertical .metric-pill {
   font-size: 11px;
   padding: 3px 8px;
+}
+
+.layout-vertical .heart-goal-pill {
+  font-size: 10px;
+  padding: 2px 6px;
+}
+
+.layout-vertical .heart-pill-track {
+  width: 28px;
+  height: 4px;
 }
 
 .layout-vertical .stage-grid {
@@ -2373,6 +2571,128 @@ onBeforeUnmount(() => {
   font-weight: 700;
   font-size: clamp(10px, 1.6vh, 14px);
   white-space: nowrap;
+}
+
+.heart-goal-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25vh 0.7vh;
+  border-radius: 999px;
+  background: rgba(244, 63, 94, 0.16);
+  border: 1px solid rgba(244, 63, 94, 0.45);
+  font-size: clamp(10px, 1.5vh, 13px);
+  white-space: nowrap;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.25s ease;
+}
+
+.heart-goal-pill.heart-milestone-ready {
+  background: rgba(244, 63, 94, 0.35);
+  border-color: #f43f5e;
+  box-shadow: 0 0 10px rgba(244, 63, 94, 0.55);
+}
+
+.heart-pulse-emoji {
+  display: inline-block;
+  animation: heartPulse 1.2s infinite ease-in-out;
+  font-size: 1.1em;
+}
+
+@keyframes heartPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.25); }
+}
+
+.heart-pill-info {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.heart-pill-count {
+  font-weight: 800;
+  color: #fda4af;
+}
+
+.heart-pill-label {
+  font-size: 0.85em;
+  color: #fecdd3;
+  opacity: 0.95;
+}
+
+.heart-pill-track {
+  width: 38px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-left: 0.15rem;
+}
+
+.heart-pill-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #f43f5e, #fb7185);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+/* Like Milestone Popup */
+.like-milestone-popup {
+  position: absolute;
+  top: 4.8vh;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6vh 1.4vh;
+  background: linear-gradient(135deg, rgba(225, 29, 72, 0.95), rgba(159, 18, 57, 0.95));
+  border: 1.5px solid #fda4af;
+  border-radius: 999px;
+  box-shadow: 0 4px 20px rgba(244, 63, 94, 0.6), 0 0 12px rgba(255, 255, 255, 0.4);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: clamp(11px, 1.8vh, 15px);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  animation: milestoneBounce 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes milestoneBounce {
+  0% { transform: translate(-50%, -10px) scale(0.8); opacity: 0; }
+  100% { transform: translate(-50%, 0) scale(1); opacity: 1; }
+}
+
+.pop-milestone-enter-active,
+.pop-milestone-leave-active {
+  transition: all 0.35s ease;
+}
+.pop-milestone-enter-from {
+  opacity: 0;
+  transform: translate(-50%, -15px) scale(0.8);
+}
+.pop-milestone-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -20px) scale(0.9);
+}
+
+.rule-item-heart {
+  border-color: rgba(244, 63, 94, 0.35);
+  background: rgba(244, 63, 94, 0.08);
+}
+.rule-heart-icon {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.badge-amber {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: rgba(245, 158, 11, 0.55);
+  color: #fde68a;
+  font-weight: 800;
 }
 
 /* Main Stage Grid */

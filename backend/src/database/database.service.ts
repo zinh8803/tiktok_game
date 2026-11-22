@@ -704,22 +704,10 @@ export class DatabaseService implements OnModuleInit {
       }
     });
 
-    // 1. Nhóm chưa từng chơi bao giờ (neverUsed): Ưu tiên tuyệt đối cao nhất
-    // 2. Nhóm đã chơi (usedGroupedByAge): Nhóm theo độ tuổi trận để lấy câu chơi lâu nhất trước
-    const neverUsed: any[] = [];
-    const usedGroupedByAge = new Map<number, any[]>();
-
-    for (const r of rows) {
-      const sIdx = lastUsedSessionIndex.get(r.id);
-      if (sIdx === undefined) {
-        neverUsed.push(r);
-      } else {
-        const list = usedGroupedByAge.get(sIdx) || [];
-        list.push(r);
-        usedGroupedByAge.set(sIdx, list);
-      }
-    }
-
+    // Thuật toán chọn câu hỏi thông minh & cân bằng độ khó:
+    // Khi phòng để chế độ độ khó là 'ALL' (mặc định), ta phân bổ đều tỷ lệ Dễ - Trung Bình - Khó:
+    // Khoảng 35% Dễ (EASY), 40% Trung bình (MEDIUM), 25% Khó (HARD).
+    // Trong từng mức độ khó, vẫn áp dụng triệt để LRU + Unplayed-first (chưa chơi ưu tiên trước, đã chơi thì lấy câu xa nhất).
     const shuffle = <T>(arr: T[]) => {
       for (let i = arr.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -728,20 +716,67 @@ export class DatabaseService implements OnModuleInit {
       return arr;
     };
 
-    // Sắp xếp các câu đã chơi theo thứ tự từ lâu nhất đến gần nhất (sessionIdx lớn nhất lên đầu)
-    const sortedAges = Array.from(usedGroupedByAge.keys()).sort((a, b) => b - a);
-    const sortedUsedPool: any[] = [];
-    for (const age of sortedAges) {
-      const itemsOfSameAge = usedGroupedByAge.get(age) || [];
-      sortedUsedPool.push(...shuffle(itemsOfSameAge));
-    }
+    const buildPriorityPoolForRows = (candidateRows: any[]) => {
+      const neverUsedList: any[] = [];
+      const groupedByAge = new Map<number, any[]>();
+      for (const r of candidateRows) {
+        const sIdx = lastUsedSessionIndex.get(r.id);
+        if (sIdx === undefined) {
+          neverUsedList.push(r);
+        } else {
+          const list = groupedByAge.get(sIdx) || [];
+          list.push(r);
+          groupedByAge.set(sIdx, list);
+        }
+      }
+      const sortedAgesList = Array.from(groupedByAge.keys()).sort((a, b) => b - a);
+      const usedPool: any[] = [];
+      for (const age of sortedAgesList) {
+        const items = groupedByAge.get(age) || [];
+        usedPool.push(...shuffle(items));
+      }
+      return [...shuffle(neverUsedList), ...usedPool];
+    };
 
-    const combinedPool = isRunAll
-      ? shuffle([...rows])
-      : [...shuffle(neverUsed), ...sortedUsedPool];
-    const selected = isRunAll
-      ? combinedPool
-      : combinedPool.slice(0, Math.max(1, config.questionCount));
+    let selected: any[] = [];
+    const countTarget = Math.max(1, config.questionCount || 15);
+
+    if (isRunAll) {
+      selected = shuffle([...rows]);
+    } else if (!config.difficulty || config.difficulty === 'ALL') {
+      // Cân bằng độ khó: Dễ ~35%, Trung bình ~40%, Khó ~25%
+      const easyRows = rows.filter((r) => r.difficulty === 'EASY');
+      const medRows = rows.filter((r) => r.difficulty === 'MEDIUM');
+      const hardRows = rows.filter((r) => r.difficulty === 'HARD');
+
+      const easyPool = buildPriorityPoolForRows(easyRows);
+      const medPool = buildPriorityPoolForRows(medRows);
+      const hardPool = buildPriorityPoolForRows(hardRows);
+
+      let targetEasy = Math.max(1, Math.round(countTarget * 0.35));
+      let targetHard = Math.max(1, Math.round(countTarget * 0.25));
+      let targetMed = countTarget - targetEasy - targetHard;
+      if (targetMed < 1) targetMed = 1;
+
+      const pickedEasy = easyPool.slice(0, targetEasy);
+      const pickedMed = medPool.slice(0, targetMed);
+      const pickedHard = hardPool.slice(0, targetHard);
+
+      const pickedSet = new Set([...pickedEasy, ...pickedMed, ...pickedHard].map((r) => r.id));
+      const pickedAll = [...pickedEasy, ...pickedMed, ...pickedHard];
+
+      // Nếu một trong các nhóm không đủ (ví dụ bộ lọc category hẹp), bù từ các nhóm còn lại
+      if (pickedAll.length < countTarget) {
+        const remainingCandidates = buildPriorityPoolForRows(rows).filter((r) => !pickedSet.has(r.id));
+        pickedAll.push(...remainingCandidates.slice(0, countTarget - pickedAll.length));
+      }
+
+      // Xáo trộn thứ tự các câu hỏi trong trận để nhịp độ dễ/tb/khó đan xen tự nhiên, không bị gom cụm
+      selected = shuffle(pickedAll.slice(0, countTarget));
+    } else {
+      const singlePool = buildPriorityPoolForRows(rows);
+      selected = singlePool.slice(0, countTarget);
+    }
     const labels: OptionLabel[] = ['A', 'B', 'C', 'D'];
 
     return selected.map((row, idx) => {
@@ -1629,6 +1664,7 @@ export class DatabaseService implements OnModuleInit {
     questionId: string;
     correctOption: OptionLabel;
     timeLimitSec: number;
+    pointMultiplier?: number;
   }) {
     return this.runInTransaction(() => {
       const results = this.db
@@ -1642,6 +1678,7 @@ export class DatabaseService implements OnModuleInit {
         .all(params.sessionId, params.questionId) as any[];
 
       const timeLimitMs = Math.max(1000, params.timeLimitSec * 1000);
+      const multiplier = Math.max(1, params.pointMultiplier || 1);
 
       const updateResultStmt = this.db.prepare(
         `UPDATE game_results
@@ -1661,9 +1698,9 @@ export class DatabaseService implements OnModuleInit {
       for (const row of results) {
         const opt = row.selected_option as OptionLabel;
         const isCorrect = opt === params.correctOption;
-        const basePoints = isCorrect ? 100 : 0;
+        const basePoints = isCorrect ? Math.round(100 * multiplier) : 0;
         const ratio = Math.min(1, Math.max(0, row.time_remaining_ms / timeLimitMs));
-        const speedBonus = isCorrect ? Math.max(5, Math.floor(50 * ratio)) : 0;
+        const speedBonus = isCorrect ? Math.round(Math.max(5, Math.floor(50 * ratio)) * multiplier) : 0;
         const totalPoints = basePoints + speedBonus;
 
         updateResultStmt.run(isCorrect ? 1 : 0, basePoints, speedBonus, totalPoints, row.id);

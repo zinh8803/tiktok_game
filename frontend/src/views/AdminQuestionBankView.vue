@@ -16,6 +16,24 @@
       <div class="topbar-tabs">
         <button
           type="button"
+          class="btn btn-rose"
+          title="Giả lập thả 500 tim vào phòng KB2026 để test mốc loại 1 đáp án sai / chuyển câu"
+          @click="handleSimulateLikes(500)"
+        >
+          <Heart :size="16" />
+          <span>💖 Thả 500 Tim Test</span>
+        </button>
+        <button
+          type="button"
+          class="btn btn-gold"
+          title="Giả lập thả 1.000 tim vào phòng KB2026 để test mốc 50/50 & x2 Điểm"
+          @click="handleSimulateLikes(1000)"
+        >
+          <Heart :size="16" />
+          <span>⚡ Thả 1.000 Tim Test</span>
+        </button>
+        <button
+          type="button"
           class="btn btn-gold"
           :disabled="isGeneratingRandom"
           @click="handleGenerateRandom(10, 'PUBLISHED')"
@@ -593,6 +611,7 @@ import {
   ClipboardCheck,
   Check,
   Save,
+  Heart,
 } from 'lucide-vue-next';
 import { api } from '../services/api';
 
@@ -604,6 +623,20 @@ const reviews = ref<any[]>([]);
 const statusNotice = ref('');
 const editingQuestionId = ref<string | null>(null);
 const isGeneratingRandom = ref(false);
+
+async function handleSimulateLikes(count: number) {
+  try {
+    await api.simulateEvent('KB2026', {
+      type: 'LIKE',
+      likeCount: count,
+      username: 'admin_tester',
+      nickname: 'Admin Tester ❤️',
+    });
+    statusNotice.value = `💖 Đã giả lập thả ${count} tim thành công vào phòng KB2026!`;
+  } catch (err: any) {
+    statusNotice.value = `Lỗi thả tim: ${err?.message || err}`;
+  }
+}
 
 const filters = reactive({
   search: '',
@@ -1246,6 +1279,16 @@ onMounted(() => {
   color: #94a3b8;
   border-top: 1px dashed rgba(148, 163, 184, 0.15);
   padding-top: 0.35rem;
+}
+
+.btn-rose {
+  background: linear-gradient(135deg, rgba(225, 29, 72, 0.85), rgba(190, 18, 60, 0.85));
+  border: 1px solid rgba(244, 63, 94, 0.6);
+  color: #ffffff;
+}
+.btn-rose:hover {
+  background: linear-gradient(135deg, rgba(225, 29, 72, 1), rgba(190, 18, 60, 1));
+  box-shadow: 0 0 12px rgba(244, 63, 94, 0.5);
 }
 
 @media (max-width: 900px) {

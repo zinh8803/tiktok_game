@@ -273,6 +273,11 @@ export class TikTokService {
         this.handleIncomingJoin(code, data);
       });
 
+      connection.on(WebcastEvent.LIKE || 'like', (data: any) => {
+        connInfo.eventsReceived++;
+        this.handleIncomingLike(code, data);
+      });
+
       connection.on(ControlEvent.DISCONNECTED || 'disconnected', () => {
         if (connInfo.state === 'DISCONNECTED') return;
         this.attemptBoundedReconnect(connInfo);
@@ -547,6 +552,37 @@ export class TikTokService {
     return this.eventProcessor.processEvent(gameEvent);
   }
 
+  private handleIncomingLike(roomCode: string, payload: any) {
+    const { userId, username, nickname, avatarUrl } = this.extractUserIdentity(payload);
+    const rawMsgId = payload.common?.msgId || payload.msgId;
+    const eventId =
+      rawMsgId && String(rawMsgId) !== '0'
+        ? `${rawMsgId}-${userId}`
+        : `tt-like-${userId}-${uuidv4()}`;
+
+    const likeCount = Math.max(1, Number(payload.likeCount || payload.count || 1));
+    const totalLikes = Number(payload.totalLikeCount || payload.totalLikes || 0);
+
+    const gameEvent: GameEvent = {
+      id: eventId,
+      roomId: roomCode,
+      type: 'LIKE',
+      user: {
+        id: userId,
+        username,
+        nickname,
+        avatarUrl,
+      },
+      payload: {
+        likeCount,
+        totalLikes,
+      },
+      receivedAt: Date.now(),
+    };
+
+    return this.eventProcessor.processEvent(gameEvent);
+  }
+
   // =====================================================================
   // BỘ GIẢ LẬP SỰ KIỆN (SIMULATOR) CHO KIỂM THỬ MVP ĐỘC LẬP (Mục 1.1, 10.1, 14)
   // =====================================================================
@@ -554,13 +590,15 @@ export class TikTokService {
   public simulateEvent(dto: {
     roomCode?: string;
     eventId?: string;
-    type: 'COMMENT' | 'GIFT' | 'JOIN';
+    type: 'COMMENT' | 'GIFT' | 'JOIN' | 'LIKE';
     userId?: string;
     username?: string;
     nickname?: string;
     content?: string;
     giftId?: string;
     giftName?: string;
+    likeCount?: number;
+    totalLikes?: number;
   }) {
     const roomCode = (dto.roomCode || 'KB2026').toUpperCase();
     const userId = dto.userId || `sim-usr-${dto.username || 'player1'}`;
@@ -580,6 +618,8 @@ export class TikTokService {
         content: dto.content,
         giftId: dto.giftId,
         giftName: dto.giftName,
+        likeCount: dto.likeCount,
+        totalLikes: dto.totalLikes,
       },
       receivedAt: Date.now(),
     };
