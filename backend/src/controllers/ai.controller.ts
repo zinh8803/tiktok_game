@@ -135,4 +135,38 @@ export class AiController {
       saved,
     };
   }
+
+  @Post('generate-crossword')
+  async generateCrossword(
+    @Body()
+    dto: {
+      topic: string;
+      keyword?: string;
+      apiKey?: string;
+      provider?: 'GEMINI' | 'OPENAI' | 'OFFLINE';
+      autoSave?: boolean;
+    },
+  ) {
+    if (!dto.topic || !dto.topic.trim()) {
+      throw new HttpException('Chủ đề bộ ô chữ không được để trống', HttpStatus.BAD_REQUEST);
+    }
+    try {
+      const questionSet = await this.aiService.generateCrosswordSet({
+        topic: dto.topic,
+        keyword: dto.keyword,
+        apiKey: dto.apiKey,
+        provider: dto.provider,
+        autoSave: dto.autoSave ?? true,
+      });
+      return {
+        success: true,
+        questionSet,
+      };
+    } catch (err: any) {
+      throw new HttpException(
+        err.message || 'Lỗi khi sinh bộ ô chữ bằng AI',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
 }

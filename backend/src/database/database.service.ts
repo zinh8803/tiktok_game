@@ -1920,4 +1920,11 @@ export class DatabaseService implements OnModuleInit {
       totalEvents: totalEvents || 0,
     };
   }
+
+  public getRawDb(): SqliteDatabase {
+    if (!this.db) {
+      this.initDatabase();
+    }
+    return this.db;
+  }
 }

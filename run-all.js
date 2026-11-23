@@ -47,6 +47,8 @@ console.log('-> Dashboard Keo Co        : http://localhost:3001/tug/dashboard');
 console.log('-> OBS Keo Co              : http://localhost:3001/tug/KB2026');
 console.log('-> Dashboard Duoi Hinh     : http://localhost:3001/catchword/dashboard');
 console.log('-> OBS Duoi Hinh           : http://localhost:3001/catchword/KB2026');
+console.log('-> Dashboard Giai Ma O Chu : http://localhost:3001/crossword/dashboard');
+console.log('-> OBS Giai Ma O Chu       : http://localhost:3001/crossword/KB2026');
 console.log('-> Admin Question Bank     : http://localhost:3001/admin');
 console.log('===================================================================\n');
 

@@ -117,6 +117,22 @@ const readyGames = [
     dashboard: '/catchword/dashboard',
     overlay: '/catchword/KB2026',
   },
+  {
+    id: 'crossword',
+    name: 'Giải Mã Ô Chữ — Crossword Battle',
+    emoji: '🧩',
+    tag: 'Ô chữ & Từ khóa · MỚI',
+    accent: '#facc15',
+    cover: 'linear-gradient(135deg, #0c4a6e 0%, #0284c7 50%, #ca8a04 100%)',
+    desc: 'Giải các câu hỏi hàng ngang để lật mở cột ký tự vàng và suy luận Từ khóa bí mật! Tất cả người xem cùng tranh tài.',
+    features: [
+      'Đúng hàng ngang đầu tiên +100đ, người đúng tiếp theo +20đ',
+      'Đoán từ khóa mọi lúc bằng cú pháp KEYWORD <đáp án> (+500đ)',
+      'Tích hợp AI sinh bộ ô chữ & Giọng đọc MC Ảo Tiếng Việt',
+    ],
+    dashboard: '/crossword/dashboard',
+    overlay: '/crossword/KB2026',
+  },
 ];
 
 const devGames = [

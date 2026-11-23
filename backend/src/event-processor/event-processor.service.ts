@@ -3,6 +3,7 @@ import { DatabaseService } from '../database/database.service';
 import { GameEngineService } from '../game-engine/game-engine.service';
 import { TugOfWarService } from '../tug-of-war/tug-of-war.service';
 import { CatchwordService } from '../catchword/catchword.service';
+import { CrosswordService } from '../crossword/crossword.service';
 import { GameEvent, OptionLabel } from '../common/types';
 
 @Injectable()
@@ -15,7 +16,8 @@ export class EventProcessorService {
     private readonly db: DatabaseService,
     private readonly gameEngine: GameEngineService,
     private readonly tugOfWar: TugOfWarService,
-    @Optional() private readonly catchword?: CatchwordService
+    @Optional() private readonly catchword?: CatchwordService,
+    @Optional() private readonly crossword?: CrosswordService
   ) {}
 
   /**
@@ -156,6 +158,12 @@ export class EventProcessorService {
       }
 
       const normalizedAnswer = this.parseAnswerFromComment(event.payload.content);
+
+      // Game Giải Mã Ô Chữ (Crossword Battle) đang mở -> chiếm quyền xử lý bình luận của phòng
+      if (this.crossword?.isActive(event.roomId)) {
+        const xwResult = this.crossword.handleComment(event);
+        return { processed: true, eventId: event.id, game: 'CROSSWORD', ...xwResult };
+      }
 
       // Game Đuổi Hình Bắt Chữ đang mở -> chiếm quyền xử lý bình luận của phòng
       if (this.catchword?.isActive(event.roomId)) {

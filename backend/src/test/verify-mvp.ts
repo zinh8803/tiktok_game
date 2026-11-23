@@ -6,6 +6,7 @@ import { TikTokService } from '../integrations/tiktok/tiktok.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { TugOfWarService } from '../tug-of-war/tug-of-war.service';
 import { CatchwordService } from '../catchword/catchword.service';
+import { CrosswordService } from '../crossword/crossword.service';
 import { AiService } from '../ai/ai.service';
 
 async function runVerificationChecklist() {
@@ -291,7 +292,112 @@ async function runVerificationChecklist() {
   assert.strictEqual(savedCatchwords.length, 2, 'Phải lưu thành công 2 câu đố AI vào CatchwordService');
   console.log('[PASS] 12. AI Question & Puzzle Engine: Tự động sinh câu hỏi, câu đố và lưu trực tiếp vào ngân hàng.');
 
-  console.log('=== TẤT CẢ 12/12 BÀI KIỂM THỬ NGHIỆP VỤ & AI ĐỀU ĐẠT (100% PASS) ===');
+  // 13. Kiểm thử Giải Mã Ô Chữ — Crossword Battle (Hybrid + Progressive + Everyone)
+  const crosswordService = new CrosswordService(mockGateway, db);
+  const fullProcessorWithCrossword = new EventProcessorService(
+    db,
+    gameEngine,
+    tugService,
+    catchwordService,
+    crosswordService
+  );
+
+  // 13a. Kiểm tra danh sách bộ câu hỏi mặc định (1,000+ câu hỏi hàng ngang) & bảo mật trạng thái public
+  const xwSets = crosswordService.listQuestionSets();
+  const xwStats = crosswordService.getBankStats();
+  assert.ok(xwSets.length >= 150, `Phải có ít nhất 150 bộ ô chữ (thực tế: ${xwSets.length})`);
+  assert.ok(
+    xwStats.totalQuestions >= 1000,
+    `Ngân hàng Giải Mã Ô Chữ phải có từ 1000 câu hỏi hàng ngang trở lên (thực tế: ${xwStats.totalQuestions})`
+  );
+
+  crosswordService.startGame(roomCode, 'xword-set-tech-01');
+  crosswordService.openRow(roomCode, 1); // Hàng 1: đáp án PHP, ký tự khóa P
+  const publicXwState = crosswordService.getPublicState(roomCode, false);
+  assert.strictEqual(publicXwState.status, 'QUESTION_ACTIVE', 'Phải chuyển sang trạng thái QUESTION_ACTIVE khi mở hàng');
+  assert.strictEqual(publicXwState.keyword, undefined, 'Tuyệt đối không lộ từ khóa bí mật xuống LIVE Overlay');
+  assert.strictEqual(
+    publicXwState.rows[0].answer,
+    undefined,
+    'Tuyệt đối không lộ đáp án của hàng ngang chưa mở xuống LIVE Overlay'
+  );
+
+  // 13b. Người chơi 1 trả lời đúng đầu tiên (+100đ), Người chơi 2 trả lời đúng tiếp theo (+20đ)
+  const xwAns1 = fullProcessorWithCrossword.processEvent({
+    id: `${runPrefix}-xw-row1-p1`,
+    roomId: roomCode,
+    type: 'COMMENT',
+    user: { id: 'xw-u1', username: 'vinh_dev', nickname: 'VinhDev' },
+    payload: { content: 'php' },
+    receivedAt: Date.now(),
+  }) as any;
+  assert.strictEqual(xwAns1.action, 'CROSSWORD_ROW_SOLVED');
+  assert.strictEqual(xwAns1.order, 1);
+  assert.strictEqual(xwAns1.pointsEarned, 100, 'Người trả lời đúng hàng ngang đầu tiên phải nhận +100 điểm');
+
+  // Người chơi 1 gửi lại đáp án lần 2 cho cùng hàng 1 -> không được cộng điểm lần 2
+  const xwAns1Dup = fullProcessorWithCrossword.processEvent({
+    id: `${runPrefix}-xw-row1-p1-dup`,
+    roomId: roomCode,
+    type: 'COMMENT',
+    user: { id: 'xw-u1', username: 'vinh_dev', nickname: 'VinhDev' },
+    payload: { content: 'PHP' },
+    receivedAt: Date.now() + 10,
+  }) as any;
+  assert.strictEqual(xwAns1Dup.action, 'CROSSWORD_ROW_ALREADY_SOLVED_BY_USER');
+
+  const xwAns2 = fullProcessorWithCrossword.processEvent({
+    id: `${runPrefix}-xw-row1-p2`,
+    roomId: roomCode,
+    type: 'COMMENT',
+    user: { id: 'xw-u2', username: 'minh_anh', nickname: 'MinhAnh' },
+    payload: { content: '1 PHP' }, // Hỗ trợ cả cú pháp chỉ định số hàng
+    receivedAt: Date.now() + 20,
+  }) as any;
+  assert.strictEqual(xwAns2.action, 'CROSSWORD_ROW_SOLVED');
+  assert.strictEqual(xwAns2.order, 2);
+  assert.strictEqual(xwAns2.pointsEarned, 20, 'Người trả lời đúng tiếp theo phải nhận +20 điểm');
+
+  // 13c. Công bố hàng ngang số 1 -> Lật mở chữ cái và hé lộ ký tự từ khóa #1 ('P')
+  const revealedRowState = crosswordService.revealRow(roomCode, 1);
+  assert.strictEqual(revealedRowState.rows[0].answer, 'PHP');
+  assert.strictEqual(revealedRowState.keywordTiles[0].isRevealed, true);
+  assert.strictEqual(revealedRowState.keywordTiles[0].char, 'P');
+
+  // 13d. Kiểm thử hết giờ hàng ngang mà KHÔNG AI trả lời đúng -> Không lật ô chữ, tự chuyển sang hàng tiếp theo
+  crosswordService.openRow(roomCode, 2); // Hàng 2: API
+  crosswordService.onRowTimerExpired(roomCode, 2); // Giả lập hết giờ Hàng 2 mà không ai trả lời đúng
+  const afterTimeoutRow2 = crosswordService.getPublicState(roomCode, false);
+  assert.strictEqual(afterTimeoutRow2.rows[1].status, 'SKIPPED', 'Hàng không ai giải đúng khi hết giờ phải chuyển sang SKIPPED (không lật)');
+  assert.strictEqual(afterTimeoutRow2.rows[1].answer, undefined, 'Hàng không ai giải đúng tuyệt đối không được lộ đáp án');
+  assert.strictEqual(afterTimeoutRow2.keywordTiles[1].isRevealed, false, 'Ký tự từ khóa của hàng không ai giải đúng không được lật mở');
+
+  // 13e. Khi đi qua hết các câu hỏi hàng ngang -> Tự động chuyển sang Vòng Giải Mã Từ Khóa Bí Mật (KEYWORD_ACTIVE)
+  crosswordService.skipRow(roomCode, 3);
+  crosswordService.skipRow(roomCode, 4);
+  const afterAllRows = crosswordService.skipRow(roomCode, 5);
+  assert.strictEqual(afterAllRows.status, 'KEYWORD_ACTIVE', 'Sau khi hết các câu hỏi hàng ngang phải tự động chuyển sang vòng trả lời từ khóa bí mật');
+
+  // 13f. Người chơi trả lời từ khóa bí mật trong vòng từ khóa cuối (hoặc bất cứ lúc nào bằng KEYWORD PARAS) (+500đ, Atomic Winner)
+  const kwWin = fullProcessorWithCrossword.processEvent({
+    id: `${runPrefix}-xw-kw-win`,
+    roomId: roomCode,
+    type: 'COMMENT',
+    user: { id: 'xw-u1', username: 'vinh_dev', nickname: 'VinhDev' },
+    payload: { content: 'PARAS' },
+    receivedAt: Date.now() + 50,
+  }) as any;
+  assert.strictEqual(kwWin.action, 'CROSSWORD_KEYWORD_SOLVED');
+  assert.strictEqual(kwWin.pointsEarned, 500, 'Giải mã đúng từ khóa bí mật phải nhận +500 điểm');
+
+  const finalXwState = crosswordService.getPublicState(roomCode, false);
+  assert.strictEqual(finalXwState.status, 'FINISHED', 'Ván chơi phải kết thúc ngay khi có người giải được từ khóa');
+  assert.strictEqual(finalXwState.keywordWinner.userId, 'xw-u1');
+  assert.strictEqual(finalXwState.leaderboard[0].score, 600, 'Tổng điểm của VinhDev phải là 100 + 500 = 600 điểm');
+  crosswordService.stopGame(roomCode);
+  console.log('[PASS] 13. Giải Mã Ô Chữ (Crossword Battle): Mở hàng ngang, bảo mật đáp án, chấm điểm +100/+20, hé lộ ký tự khóa và giải mã từ khóa +500đ chính xác.');
+
+  console.log('=== TẤT CẢ 13/13 BÀI KIỂM THỬ NGHIỆP VỤ & AI ĐỀU ĐẠT (100% PASS) ===');
 }
 
 runVerificationChecklist().catch((err) => {

@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CatchwordService } from '../catchword/catchword.service';
+import { CrosswordService, CrosswordQuestionSet } from '../crossword/crossword.service';
 import { OptionLabel, QuestionDifficulty, QuestionRecord } from '../common/types';
 
 export interface GeneratedQuestion {
@@ -29,6 +30,7 @@ export class AiService {
   constructor(
     private readonly db: DatabaseService,
     private readonly catchwordService: CatchwordService,
+    @Optional() private readonly crosswordService?: CrosswordService,
   ) {}
 
   public getStatus() {
@@ -515,5 +517,159 @@ YÊU CẦU ĐỊNH DẠNG:
         explanation: 'Hành động ngu ngốc tự đánh lừa bản thân khi làm điều xằng bậy.',
       },
     ];
+  }
+
+  /**
+   * Sinh bộ câu hỏi Giải Mã Ô Chữ (Crossword Battle) tự động bằng AI hoặc Offline Smart Generator
+   */
+  public async generateCrosswordSet(params: {
+    topic: string;
+    keyword?: string;
+    apiKey?: string;
+    provider?: 'GEMINI' | 'OPENAI' | 'OFFLINE';
+    autoSave?: boolean;
+  }): Promise<CrosswordQuestionSet> {
+    const topic = (params.topic || 'Khoa học và Đời sống Việt Nam').trim();
+    const apiKey = params.apiKey || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY;
+    const provider = params.provider || (apiKey ? 'GEMINI' : 'OFFLINE');
+
+    this.logger.log(`Generating Crossword set for topic "${topic}" using provider: ${provider}`);
+
+    if (provider === 'GEMINI' && apiKey) {
+      try {
+        const model = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const prompt = `Bạn là biên tập viên gameshow "Giải Mã Ô Chữ" (Crossword Battle) trên TikTok LIVE.
+Hãy thiết kế 1 bộ câu hỏi ô chữ tiếng Việt chủ đề "${topic}"${params.keyword ? ` với Từ khóa bí mật là "${params.keyword.toUpperCase()}"` : ' với Từ khóa bí mật dài 5 chữ cái'}.
+QUY TẮC BẮT BUỘC:
+- Số hàng ngang phải ĐÚNG BẰNG số chữ cái viết liền của keyword.
+- Đáp án của hàng ngang thứ i PHẢI chứa chữ cái thứ i của keyword!
+- Trả về JSON thuần túy:
+{
+  "name": "Tên bộ ô chữ",
+  "topic": "${topic}",
+  "keyword": "TỪ KHÓA (5 chữ cái)",
+  "keywordHint": "Gợi ý giải mã từ khóa",
+  "description": "Mô tả ngắn",
+  "rows": [
+    {
+      "rowNumber": 1,
+      "question": "Câu hỏi hàng ngang 1?",
+      "answer": "ĐÁP ÁN 1",
+      "hint": "Gợi ý hàng 1",
+      "timeLimit": 20,
+      "points": 100
+    }
+  ]
+}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.7, responseMimeType: 'application/json' },
+          }),
+        });
+        if (res.ok) {
+          const data: any = await res.json();
+          const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (rawText) {
+            const parsed = this.parseJsonSafely<any>(rawText);
+            if (this.crosswordService) {
+              return params.autoSave !== false
+                ? this.crosswordService.createQuestionSet(parsed)
+                : this.crosswordService.normalizeAndValidateSet(parsed);
+            }
+          }
+        }
+      } catch (err: any) {
+        this.logger.warn(`Gemini crossword generation failed (${err.message}), using Offline Crossword Generator.`);
+      }
+    }
+
+    const offlineTemplates: Array<Partial<CrosswordQuestionSet>> = [
+      {
+        name: `Khám Phá Vũ Trụ & Khoa Học (${topic})`,
+        topic,
+        keyword: 'SAOĐỎ',
+        keywordHint: 'Biểu tượng ngôi sao năm cánh lấp lánh trên lá quốc kỳ Việt Nam (5 chữ cái)',
+        description: 'Bộ câu hỏi khoa học tự nhiên và thiên văn học hấp dẫn.',
+        rows: [
+          {
+            id: `xr-ai-${Date.now()}-1`,
+            rowNumber: 1,
+            question: 'Kim loại màu xám bạc phổ biến nhất dùng để sản xuất thép trong xây dựng và công nghiệp?',
+            answer: 'SẮT',
+            cleanAnswer: 'SẮT',
+            acceptedAnswers: ['SẮT', 'SAT', 'FE'],
+            hint: 'Ký hiệu hóa học là Fe',
+            answerPosition: 1, // [S]ẮT -> S
+            keywordIndex: 1,
+            timeLimit: 20,
+            points: 100,
+          },
+          {
+            id: 'xr-ai-2',
+            rowNumber: 2,
+            question: 'Kim loại quý màu vàng óng được dùng làm trang sức và dự trữ tiền tệ quốc gia?',
+            answer: 'VÀNG',
+            cleanAnswer: 'VÀNG',
+            acceptedAnswers: ['VÀNG', 'VANG', 'AU'],
+            hint: 'Ký hiệu hóa học là Au',
+            answerPosition: 2, // V[À]NG -> A
+            keywordIndex: 2,
+            timeLimit: 20,
+            points: 100,
+          },
+          {
+            id: 'xr-ai-3',
+            rowNumber: 3,
+            question: 'Khí cần thiết nhất cho sự hô hấp của con người và sự cháy trên Trái Đất?',
+            answer: 'OXY',
+            cleanAnswer: 'OXY',
+            acceptedAnswers: ['OXY', 'OXI', 'OXYGEN'],
+            hint: 'Chiếm khoảng 21% thể tích không khí',
+            answerPosition: 1, // [O]XY -> O
+            keywordIndex: 3,
+            timeLimit: 20,
+            points: 100,
+          },
+          {
+            id: 'xr-ai-4',
+            rowNumber: 4,
+            question: 'Hành tinh thứ ba tính từ Mặt Trời, ngôi nhà chung của sự sống và nhân loại?',
+            answer: 'TRÁI ĐẤT',
+            cleanAnswer: 'TRÁIĐẤT',
+            acceptedAnswers: ['TRÁI ĐẤT', 'TRAI DAT', 'ĐỊA CẦU'],
+            hint: 'Hành tinh xanh của chúng ta',
+            answerPosition: 5, // TRÁI[Đ]ẤT -> Đ
+            keywordIndex: 4,
+            timeLimit: 20,
+            points: 100,
+          },
+          {
+            id: 'xr-ai-5',
+            rowNumber: 5,
+            question: 'Hiện tượng thời tiết có luồng không khí xoáy mạnh kèm mưa lớn từ biển đổ bộ vào đất liền?',
+            answer: 'BÃO',
+            cleanAnswer: 'BÃO',
+            acceptedAnswers: ['BÃO', 'BAO', 'CƠN BÃO'],
+            hint: '3 chữ cái, thường xuất hiện ở Biển Đông vào mùa mưa',
+            answerPosition: 3, // BÃ[O] -> O
+            keywordIndex: 5,
+            timeLimit: 20,
+            points: 100,
+          },
+        ],
+      },
+    ];
+
+    const rawSet = offlineTemplates[0];
+    if (this.crosswordService) {
+      return params.autoSave !== false
+        ? this.crosswordService.createQuestionSet(rawSet)
+        : this.crosswordService.normalizeAndValidateSet(rawSet);
+    }
+    return rawSet as CrosswordQuestionSet;
   }
 }

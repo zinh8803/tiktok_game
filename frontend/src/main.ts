@@ -10,6 +10,8 @@ import TugDashboardView from './views/TugDashboardView.vue';
 import TugOverlayView from './views/TugOverlayView.vue';
 import CatchwordDashboardView from './views/CatchwordDashboardView.vue';
 import CatchwordOverlayView from './views/CatchwordOverlayView.vue';
+import CrosswordDashboardView from './views/CrosswordDashboardView.vue';
+import CrosswordOverlayView from './views/CrosswordOverlayView.vue';
 import './style.css';
 
 const router = createRouter({
@@ -61,6 +63,17 @@ const router = createRouter({
       path: '/catchword/:roomCode?',
       name: 'catchword-overlay',
       component: CatchwordOverlayView,
+    },
+    // Game 4: Giải Mã Ô Chữ (Crossword Battle)
+    {
+      path: '/crossword/dashboard',
+      name: 'crossword-dashboard',
+      component: CrosswordDashboardView,
+    },
+    {
+      path: '/crossword/:roomCode?',
+      name: 'crossword-overlay',
+      component: CrosswordOverlayView,
     },
   ],
 });
