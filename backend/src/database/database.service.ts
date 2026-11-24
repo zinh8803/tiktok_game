@@ -31,6 +31,7 @@ export class DatabaseService implements OnModuleInit {
   private readonly logger = new Logger(DatabaseService.name);
   private db!: SqliteDatabase;
   private readonly dbPath: string;
+  private readonly roomConfigCache = new Map<string, any>();
 
   constructor() {
     const backendRoot = path.resolve(__dirname, '../..');
@@ -52,15 +53,35 @@ export class DatabaseService implements OnModuleInit {
     if (this.db) return;
     this.db = new DatabaseSync(this.dbPath);
     this.db.exec('PRAGMA journal_mode = WAL;');
+    this.db.exec('PRAGMA synchronous = NORMAL;');
+    this.db.exec('PRAGMA temp_store = MEMORY;');
+    this.db.exec('PRAGMA cache_size = -32000;');
+    this.db.exec('PRAGMA busy_timeout = 5000;');
     this.db.exec('PRAGMA foreign_keys = ON;');
 
-    const schemaPath = path.join(__dirname, 'mysql-init.sql');
+    const primarySchemaPath = path.join(__dirname, 'mysql-init.sql');
+    const fallbackSchemaPath = path.join(__dirname, '../../src/database/mysql-init.sql');
+    const schemaPath = fs.existsSync(primarySchemaPath) ? primarySchemaPath : fallbackSchemaPath;
     const schemaSql = fs.readFileSync(schemaPath, 'utf-8');
     this.db.exec(schemaSql);
     this.ensureGiftRewardColumns();
+    this.ensurePerformanceIndexes();
 
     this.seedIfEmpty();
     this.logger.log(`SQLite Database initialized at ${this.dbPath}`);
+  }
+
+  private ensurePerformanceIndexes() {
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_game_players_session_user
+        ON game_players(session_id, tiktok_user_id);
+      CREATE INDEX IF NOT EXISTS idx_game_players_session_score
+        ON game_players(session_id, total_score DESC, correct_count DESC, joined_at ASC);
+      CREATE INDEX IF NOT EXISTS idx_game_results_session_question
+        ON game_results(session_id, question_id);
+      CREATE INDEX IF NOT EXISTS idx_game_results_lookup
+        ON game_results(session_id, question_id, player_id);
+    `);
   }
 
   private ensureGiftRewardColumns() {
@@ -683,22 +704,10 @@ export class DatabaseService implements OnModuleInit {
       }
     });
 
-    // 1. Nhóm chưa từng chơi bao giờ (neverUsed): Ưu tiên tuyệt đối cao nhất
-    // 2. Nhóm đã chơi (usedGroupedByAge): Nhóm theo độ tuổi trận để lấy câu chơi lâu nhất trước
-    const neverUsed: any[] = [];
-    const usedGroupedByAge = new Map<number, any[]>();
-
-    for (const r of rows) {
-      const sIdx = lastUsedSessionIndex.get(r.id);
-      if (sIdx === undefined) {
-        neverUsed.push(r);
-      } else {
-        const list = usedGroupedByAge.get(sIdx) || [];
-        list.push(r);
-        usedGroupedByAge.set(sIdx, list);
-      }
-    }
-
+    // Thuật toán chọn câu hỏi thông minh & cân bằng độ khó:
+    // Khi phòng để chế độ độ khó là 'ALL' (mặc định), ta phân bổ đều tỷ lệ Dễ - Trung Bình - Khó:
+    // Khoảng 35% Dễ (EASY), 40% Trung bình (MEDIUM), 25% Khó (HARD).
+    // Trong từng mức độ khó, vẫn áp dụng triệt để LRU + Unplayed-first (chưa chơi ưu tiên trước, đã chơi thì lấy câu xa nhất).
     const shuffle = <T>(arr: T[]) => {
       for (let i = arr.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -707,20 +716,67 @@ export class DatabaseService implements OnModuleInit {
       return arr;
     };
 
-    // Sắp xếp các câu đã chơi theo thứ tự từ lâu nhất đến gần nhất (sessionIdx lớn nhất lên đầu)
-    const sortedAges = Array.from(usedGroupedByAge.keys()).sort((a, b) => b - a);
-    const sortedUsedPool: any[] = [];
-    for (const age of sortedAges) {
-      const itemsOfSameAge = usedGroupedByAge.get(age) || [];
-      sortedUsedPool.push(...shuffle(itemsOfSameAge));
-    }
+    const buildPriorityPoolForRows = (candidateRows: any[]) => {
+      const neverUsedList: any[] = [];
+      const groupedByAge = new Map<number, any[]>();
+      for (const r of candidateRows) {
+        const sIdx = lastUsedSessionIndex.get(r.id);
+        if (sIdx === undefined) {
+          neverUsedList.push(r);
+        } else {
+          const list = groupedByAge.get(sIdx) || [];
+          list.push(r);
+          groupedByAge.set(sIdx, list);
+        }
+      }
+      const sortedAgesList = Array.from(groupedByAge.keys()).sort((a, b) => b - a);
+      const usedPool: any[] = [];
+      for (const age of sortedAgesList) {
+        const items = groupedByAge.get(age) || [];
+        usedPool.push(...shuffle(items));
+      }
+      return [...shuffle(neverUsedList), ...usedPool];
+    };
 
-    const combinedPool = isRunAll
-      ? shuffle([...rows])
-      : [...shuffle(neverUsed), ...sortedUsedPool];
-    const selected = isRunAll
-      ? combinedPool
-      : combinedPool.slice(0, Math.max(1, config.questionCount));
+    let selected: any[] = [];
+    const countTarget = Math.max(1, config.questionCount || 15);
+
+    if (isRunAll) {
+      selected = shuffle([...rows]);
+    } else if (!config.difficulty || config.difficulty === 'ALL') {
+      // Cân bằng độ khó: Dễ ~35%, Trung bình ~40%, Khó ~25%
+      const easyRows = rows.filter((r) => r.difficulty === 'EASY');
+      const medRows = rows.filter((r) => r.difficulty === 'MEDIUM');
+      const hardRows = rows.filter((r) => r.difficulty === 'HARD');
+
+      const easyPool = buildPriorityPoolForRows(easyRows);
+      const medPool = buildPriorityPoolForRows(medRows);
+      const hardPool = buildPriorityPoolForRows(hardRows);
+
+      let targetEasy = Math.max(1, Math.round(countTarget * 0.35));
+      let targetHard = Math.max(1, Math.round(countTarget * 0.25));
+      let targetMed = countTarget - targetEasy - targetHard;
+      if (targetMed < 1) targetMed = 1;
+
+      const pickedEasy = easyPool.slice(0, targetEasy);
+      const pickedMed = medPool.slice(0, targetMed);
+      const pickedHard = hardPool.slice(0, targetHard);
+
+      const pickedSet = new Set([...pickedEasy, ...pickedMed, ...pickedHard].map((r) => r.id));
+      const pickedAll = [...pickedEasy, ...pickedMed, ...pickedHard];
+
+      // Nếu một trong các nhóm không đủ (ví dụ bộ lọc category hẹp), bù từ các nhóm còn lại
+      if (pickedAll.length < countTarget) {
+        const remainingCandidates = buildPriorityPoolForRows(rows).filter((r) => !pickedSet.has(r.id));
+        pickedAll.push(...remainingCandidates.slice(0, countTarget - pickedAll.length));
+      }
+
+      // Xáo trộn thứ tự các câu hỏi trong trận để nhịp độ dễ/tb/khó đan xen tự nhiên, không bị gom cụm
+      selected = shuffle(pickedAll.slice(0, countTarget));
+    } else {
+      const singlePool = buildPriorityPoolForRows(rows);
+      selected = singlePool.slice(0, countTarget);
+    }
     const labels: OptionLabel[] = ['A', 'B', 'C', 'D'];
 
     return selected.map((row, idx) => {
@@ -1218,6 +1274,11 @@ export class DatabaseService implements OnModuleInit {
   // =====================================================================
 
   public getRoomWithConfig(roomIdOrCode: string) {
+    const cached = this.roomConfigCache.get(roomIdOrCode);
+    if (cached) {
+      return cached;
+    }
+
     const room = this.db
       .prepare(`SELECT * FROM rooms WHERE id = ? OR room_code = ? LIMIT 1`)
       .get(roomIdOrCode, roomIdOrCode) as any;
@@ -1227,7 +1288,7 @@ export class DatabaseService implements OnModuleInit {
       .prepare(`SELECT * FROM room_configs WHERE room_id = ?`)
       .get(room.id) as any;
 
-    return {
+    const result = {
       id: room.id,
       roomCode: room.room_code,
       title: room.title,
@@ -1243,6 +1304,10 @@ export class DatabaseService implements OnModuleInit {
         revealDuration: config?.reveal_duration ?? 6,
       },
     };
+
+    this.roomConfigCache.set(room.id, result);
+    this.roomConfigCache.set(room.room_code, result);
+    return result;
   }
 
   public updateRoomConfig(
@@ -1291,6 +1356,7 @@ export class DatabaseService implements OnModuleInit {
         );
     });
 
+    this.roomConfigCache.clear();
     return this.getRoomWithConfig(room.id);
   }
 
@@ -1298,6 +1364,7 @@ export class DatabaseService implements OnModuleInit {
     this.db
       .prepare(`UPDATE rooms SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
       .run(status, roomId);
+    this.roomConfigCache.clear();
   }
 
   public createGameSession(roomId: string, snapshots: SessionQuestionSnapshot[]) {
@@ -1597,6 +1664,7 @@ export class DatabaseService implements OnModuleInit {
     questionId: string;
     correctOption: OptionLabel;
     timeLimitSec: number;
+    pointMultiplier?: number;
   }) {
     return this.runInTransaction(() => {
       const results = this.db
@@ -1610,6 +1678,7 @@ export class DatabaseService implements OnModuleInit {
         .all(params.sessionId, params.questionId) as any[];
 
       const timeLimitMs = Math.max(1000, params.timeLimitSec * 1000);
+      const multiplier = Math.max(1, params.pointMultiplier || 1);
 
       const updateResultStmt = this.db.prepare(
         `UPDATE game_results
@@ -1628,10 +1697,10 @@ export class DatabaseService implements OnModuleInit {
 
       for (const row of results) {
         const opt = row.selected_option as OptionLabel;
-        const isCorrect = opt === params.correctOption && row.time_remaining_ms > 0;
-        const basePoints = isCorrect ? 100 : 0;
+        const isCorrect = opt === params.correctOption;
+        const basePoints = isCorrect ? Math.round(100 * multiplier) : 0;
         const ratio = Math.min(1, Math.max(0, row.time_remaining_ms / timeLimitMs));
-        const speedBonus = isCorrect ? Math.floor(50 * ratio) : 0;
+        const speedBonus = isCorrect ? Math.round(Math.max(5, Math.floor(50 * ratio)) * multiplier) : 0;
         const totalPoints = basePoints + speedBonus;
 
         updateResultStmt.run(isCorrect ? 1 : 0, basePoints, speedBonus, totalPoints, row.id);
@@ -1655,9 +1724,12 @@ export class DatabaseService implements OnModuleInit {
   public getSessionLeaderboard(sessionId: string, lastQuestionId?: string): LeaderboardEntry[] {
     const rows = this.db
       .prepare(
-        `SELECT p.*,
-          (SELECT r.total_points FROM game_results r WHERE r.session_id = p.session_id AND r.player_id = p.id AND r.question_id = ?) as last_delta
+        `SELECT p.*, r.total_points as last_delta
          FROM game_players p
+         LEFT JOIN game_results r
+           ON r.session_id = p.session_id
+          AND r.player_id = p.id
+          AND r.question_id = ?
          WHERE p.session_id = ?
          ORDER BY p.total_score DESC, p.correct_count DESC, p.joined_at ASC`
       )
@@ -1709,17 +1781,10 @@ export class DatabaseService implements OnModuleInit {
     payload: any;
     receivedAt: number;
   }): boolean {
-    const existing = this.db
-      .prepare(`SELECT id FROM live_events WHERE id = ?`)
-      .get(event.id);
-    if (existing) {
-      return false;
-    }
-
     try {
-      this.db
+      const res = this.db
         .prepare(
-          `INSERT INTO live_events (id, room_id, event_type, tiktok_user_id, username, nickname, payload_json, received_at, processed)
+          `INSERT OR IGNORE INTO live_events (id, room_id, event_type, tiktok_user_id, username, nickname, payload_json, received_at, processed)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`
         )
         .run(
@@ -1731,8 +1796,8 @@ export class DatabaseService implements OnModuleInit {
           event.nickname,
           JSON.stringify(event.payload || {}),
           event.receivedAt
-        );
-      return true;
+        ) as { changes?: number };
+      return Boolean(res && res.changes && res.changes > 0);
     } catch {
       return false;
     }
@@ -1854,5 +1919,12 @@ export class DatabaseService implements OnModuleInit {
       totalPlayers: totalPlayers || 0,
       totalEvents: totalEvents || 0,
     };
+  }
+
+  public getRawDb(): SqliteDatabase {
+    if (!this.db) {
+      this.initDatabase();
+    }
+    return this.db;
   }
 }

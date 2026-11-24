@@ -4,6 +4,10 @@ import { GameEngineService } from '../game-engine/game-engine.service';
 import { EventProcessorService } from '../event-processor/event-processor.service';
 import { TikTokService } from '../integrations/tiktok/tiktok.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
+import { TugOfWarService } from '../tug-of-war/tug-of-war.service';
+import { CatchwordService } from '../catchword/catchword.service';
+import { CrosswordService } from '../crossword/crossword.service';
+import { AiService } from '../ai/ai.service';
 
 async function runVerificationChecklist() {
   console.log('=== KNOWLEDGE BATTLE - KIỂM THỬ NGHIỆP VỤ THEO CHECKLIST MỤC 10.1 ===');
@@ -19,7 +23,7 @@ async function runVerificationChecklist() {
   db.initDatabase();
 
   const gameEngine = new GameEngineService(db, mockGateway);
-  const eventProcessor = new EventProcessorService(db, gameEngine);
+  const eventProcessor = new EventProcessorService(db, gameEngine, new TugOfWarService(db, mockGateway));
   const tiktokService = new TikTokService(eventProcessor, mockGateway);
 
   const roomCode = 'KB2026';
@@ -112,7 +116,20 @@ async function runVerificationChecklist() {
   assert.strictEqual(p2.totalScore, 0, 'Người trả lời sai phải có 0 điểm');
   console.log(`[PASS] 5. Công thức tính điểm đúng chuẩn: Người chơi 1 đạt ${p1.totalScore} điểm, Người chơi 2 đạt ${p2.totalScore} điểm.`);
 
-  // 7. Bình luận sau thời hạn (khi câu hỏi đã đóng) -> Không tính điểm
+  // 7. Bình luận sau thời hạn:
+  // 7a. Người chơi 1 đã trả lời trước đó cố gửi lại khi câu hỏi đóng -> Bị từ chối
+  const reAnswerAttempt = eventProcessor.processEvent({
+    id: `${runPrefix}-evt-player1-reanswer`,
+    roomId: roomCode,
+    type: 'COMMENT',
+    user: { id: 'tt-u1', username: 'player_one', nickname: 'Người Chơi 1' },
+    payload: { content: correctOpt },
+    receivedAt: Date.now(),
+  });
+  assert.strictEqual((reAnswerAttempt as any).acceptedAnswer, false, 'Người chơi đã trả lời không được đổi đáp án khi câu hỏi đóng');
+
+  // 7b. Người chơi 3 gửi sau khi đã hết cả cửa sổ bù trễ livestream (LATE_STREAM_GRACE_MS) -> Không tính điểm
+  runtime.questionEndsAt = Date.now() - 10000;
   const lateAttempt = eventProcessor.processEvent({
     id: `${runPrefix}-evt-player3-late`,
     roomId: roomCode,
@@ -121,7 +138,7 @@ async function runVerificationChecklist() {
     payload: { content: correctOpt },
     receivedAt: Date.now(),
   });
-  assert.strictEqual((lateAttempt as any).acceptedAnswer, false, 'Trả lời sau khi câu hỏi đóng không được tính điểm');
+  assert.strictEqual((lateAttempt as any).acceptedAnswer, false, 'Trả lời sau khi hết thời gian bù trễ không được tính điểm');
   console.log('[PASS] 6. Bình luận sau thời hạn không được tính điểm.');
 
   // 8. OBS tải lại Browser Source -> Khôi phục trạng thái từ backend
@@ -177,7 +194,210 @@ async function runVerificationChecklist() {
   console.log('[PASS] 9. Quà tặng có thể cấu hình để loại một đáp án sai thay vì cộng điểm.');
 
   gameEngine.resetToWaitingRoom(roomCode);
-  console.log('=== TẤT CẢ 9/9 BÀI KIỂM THỬ NGHIỆP VỤ ĐỀU ĐẠT (100% PASS) ===');
+
+  // 10. Kiểm thử Kéo Co Tri Thức (Tug of War)
+  const tugService = new TugOfWarService(db, mockGateway);
+  tugService.openLobby(roomCode);
+  tugService.start(roomCode);
+  tugService.nextQuestion(roomCode); // Chuyển ngay vào câu hỏi 1
+  const tugState1 = tugService.getPublicState(roomCode);
+  assert.strictEqual(tugState1.status, 'QUESTION', 'Kéo Co phải vào status QUESTION sau khi mở câu hỏi');
+
+  // Lấy câu hỏi hiện tại từ runtime để kiểm thử đáp án
+  const tugRt = (tugService as any).getRuntime(roomCode);
+  const currentTugQ = tugRt.questions[tugRt.questionIndex];
+  assert.ok(currentTugQ, 'Kéo Co phải có câu hỏi khi bắt đầu');
+
+  // Người chơi tham gia team Đỏ (bình luận '1')
+  tugService.handleComment(
+    {
+      id: `${runPrefix}-tug-c1`,
+      roomId: roomCode,
+      type: 'COMMENT',
+      user: { id: 'tt-tug-red1', username: 'red_champ', nickname: 'Anh Hùng Đỏ' },
+      payload: { content: '1' }, // chọn Đỏ
+      receivedAt: Date.now(),
+    },
+    null
+  );
+
+  // Người chơi gửi đáp án đúng
+  const ansResult = tugService.handleComment(
+    {
+      id: `${runPrefix}-tug-ans1`,
+      roomId: roomCode,
+      type: 'COMMENT',
+      user: { id: 'tt-tug-red1', username: 'red_champ', nickname: 'Anh Hùng Đỏ' },
+      payload: { content: currentTugQ.correctOption },
+      receivedAt: Date.now(),
+    },
+    currentTugQ.correctOption
+  );
+  assert.strictEqual(ansResult.action, 'TUG_ANSWER_RECORDED', 'Đáp án kéo co phải được ghi nhận');
+
+  // Chốt câu hỏi (reveal) -> tính lực kéo và di chuyển dây
+  tugService.reveal(roomCode);
+  const tugStateAfterAns = tugService.getPublicState(roomCode);
+  assert.ok(tugStateAfterAns.teams.RED.count >= 1, 'Đội Đỏ phải ghi nhận thành viên');
+  assert.ok(tugStateAfterAns.teams.RED.contribution >= 1, 'Đội Đỏ phải được cộng điểm/lực kéo');
+  assert.ok(tugStateAfterAns.rope < 0, 'Dây kéo phải dịch chuyển về phía đội Đỏ (âm)');
+  tugService.stop(roomCode);
+  console.log('[PASS] 10. Kéo Co Tri Thức: Chọn đội, ghi nhận đáp án, chốt điểm kéo dây chính xác.');
+
+  // 11. Kiểm thử Đuổi Hình Bắt Chữ LIVE (Catchword)
+  const catchwordService = new CatchwordService(mockGateway);
+  catchwordService.openLobby(roomCode);
+  catchwordService.start(roomCode);
+  catchwordService.nextPuzzle(roomCode); // Chuyển ngay vào câu đố 1
+  const cwState1 = catchwordService.getPublicState(roomCode, true);
+  assert.strictEqual(cwState1.status, 'QUESTION', 'Đuổi Hình Bắt Chữ phải vào status QUESTION');
+  assert.ok(cwState1.puzzle, 'Đuổi Hình Bắt Chữ phải có puzzle hiện tại');
+
+  // Người chơi đoán đúng câu đố (lấy từ bí mật test)
+  const cwAnswer = cwState1.secret.answer;
+  catchwordService.handleComment({
+    id: `${runPrefix}-cw-guess1`,
+    roomId: roomCode,
+    type: 'COMMENT',
+    user: { id: 'tt-cw-u1', username: 'puzzle_master', nickname: 'Cao Thủ Bắt Chữ' },
+    payload: { content: cwAnswer },
+    receivedAt: Date.now(),
+  });
+  const cwStateAfterGuess = catchwordService.getPublicState(roomCode);
+  assert.ok(cwStateAfterGuess.solvedCount >= 1, 'Người đoán đúng đầu tiên phải được ghi nhận');
+  assert.ok(cwStateAfterGuess.leaderboard[0].score >= 80, 'Điểm người đoán đúng phải đạt điểm thưởng hợp lệ');
+  catchwordService.stop(roomCode);
+  console.log('[PASS] 11. Đuổi Hình Bắt Chữ LIVE: Khởi động vòng, nhận diện đáp án chuẩn hóa tiếng Việt, tính điểm xếp hạng.');
+
+  // 12. Kiểm thử AI Engine: Tự động sinh câu hỏi và câu đố đuổi hình bắt chữ
+  const aiService = new AiService(db, catchwordService);
+  const aiQuestions = await aiService.generateQuestions({
+    topic: 'Lịch sử Việt Nam hào hùng',
+    count: 2,
+    provider: 'OFFLINE',
+  });
+  assert.strictEqual(aiQuestions.length, 2, 'AI phải sinh đúng số lượng câu hỏi yêu cầu');
+  assert.ok(aiQuestions[0].options.A, 'Câu hỏi AI phải có đầy đủ 4 đáp án');
+  const savedAiQs = aiService.saveQuestionsToDatabase(aiQuestions, true);
+  assert.strictEqual(savedAiQs.length, 2, 'Phải lưu thành công 2 câu hỏi AI vào SQLite');
+  assert.strictEqual(savedAiQs[0].source?.sourceType, 'AI', 'Câu hỏi phải mang nhãn nguồn AI');
+
+  const aiCatchwords = await aiService.generateCatchwords({
+    topic: 'Ca dao tục ngữ',
+    count: 2,
+    provider: 'OFFLINE',
+  });
+  assert.strictEqual(aiCatchwords.length, 2, 'AI phải sinh đúng số lượng câu đố đuổi hình bắt chữ');
+  const savedCatchwords = aiService.saveCatchwordsToBank(aiCatchwords);
+  assert.strictEqual(savedCatchwords.length, 2, 'Phải lưu thành công 2 câu đố AI vào CatchwordService');
+  console.log('[PASS] 12. AI Question & Puzzle Engine: Tự động sinh câu hỏi, câu đố và lưu trực tiếp vào ngân hàng.');
+
+  // 13. Kiểm thử Giải Mã Ô Chữ — Crossword Battle (Hybrid + Progressive + Everyone)
+  const crosswordService = new CrosswordService(mockGateway, db);
+  const fullProcessorWithCrossword = new EventProcessorService(
+    db,
+    gameEngine,
+    tugService,
+    catchwordService,
+    crosswordService
+  );
+
+  // 13a. Kiểm tra danh sách bộ câu hỏi mặc định (1,000+ câu hỏi hàng ngang) & bảo mật trạng thái public
+  const xwSets = crosswordService.listQuestionSets();
+  const xwStats = crosswordService.getBankStats();
+  assert.ok(xwSets.length >= 150, `Phải có ít nhất 150 bộ ô chữ (thực tế: ${xwSets.length})`);
+  assert.ok(
+    xwStats.totalQuestions >= 1000,
+    `Ngân hàng Giải Mã Ô Chữ phải có từ 1000 câu hỏi hàng ngang trở lên (thực tế: ${xwStats.totalQuestions})`
+  );
+
+  crosswordService.startGame(roomCode, 'xword-set-tech-01');
+  crosswordService.openRow(roomCode, 1); // Hàng 1: đáp án PHP, ký tự khóa P
+  const publicXwState = crosswordService.getPublicState(roomCode, false);
+  assert.strictEqual(publicXwState.status, 'QUESTION_ACTIVE', 'Phải chuyển sang trạng thái QUESTION_ACTIVE khi mở hàng');
+  assert.strictEqual(publicXwState.keyword, undefined, 'Tuyệt đối không lộ từ khóa bí mật xuống LIVE Overlay');
+  assert.strictEqual(
+    publicXwState.rows[0].answer,
+    undefined,
+    'Tuyệt đối không lộ đáp án của hàng ngang chưa mở xuống LIVE Overlay'
+  );
+
+  // 13b. Người chơi 1 trả lời đúng đầu tiên (+100đ), Người chơi 2 trả lời đúng tiếp theo (+20đ)
+  const xwAns1 = fullProcessorWithCrossword.processEvent({
+    id: `${runPrefix}-xw-row1-p1`,
+    roomId: roomCode,
+    type: 'COMMENT',
+    user: { id: 'xw-u1', username: 'vinh_dev', nickname: 'VinhDev' },
+    payload: { content: 'php' },
+    receivedAt: Date.now(),
+  }) as any;
+  assert.strictEqual(xwAns1.action, 'CROSSWORD_ROW_SOLVED');
+  assert.strictEqual(xwAns1.order, 1);
+  assert.strictEqual(xwAns1.pointsEarned, 100, 'Người trả lời đúng hàng ngang đầu tiên phải nhận +100 điểm');
+
+  // Người chơi 1 gửi lại đáp án lần 2 cho cùng hàng 1 -> không được cộng điểm lần 2
+  const xwAns1Dup = fullProcessorWithCrossword.processEvent({
+    id: `${runPrefix}-xw-row1-p1-dup`,
+    roomId: roomCode,
+    type: 'COMMENT',
+    user: { id: 'xw-u1', username: 'vinh_dev', nickname: 'VinhDev' },
+    payload: { content: 'PHP' },
+    receivedAt: Date.now() + 10,
+  }) as any;
+  assert.strictEqual(xwAns1Dup.action, 'CROSSWORD_ROW_ALREADY_SOLVED_BY_USER');
+
+  const xwAns2 = fullProcessorWithCrossword.processEvent({
+    id: `${runPrefix}-xw-row1-p2`,
+    roomId: roomCode,
+    type: 'COMMENT',
+    user: { id: 'xw-u2', username: 'minh_anh', nickname: 'MinhAnh' },
+    payload: { content: '1 PHP' }, // Hỗ trợ cả cú pháp chỉ định số hàng
+    receivedAt: Date.now() + 20,
+  }) as any;
+  assert.strictEqual(xwAns2.action, 'CROSSWORD_ROW_SOLVED');
+  assert.strictEqual(xwAns2.order, 2);
+  assert.strictEqual(xwAns2.pointsEarned, 20, 'Người trả lời đúng tiếp theo phải nhận +20 điểm');
+
+  // 13c. Công bố hàng ngang số 1 -> Lật mở chữ cái và hé lộ ký tự từ khóa #1 ('P')
+  const revealedRowState = crosswordService.revealRow(roomCode, 1);
+  assert.strictEqual(revealedRowState.rows[0].answer, 'PHP');
+  assert.strictEqual(revealedRowState.keywordTiles[0].isRevealed, true);
+  assert.strictEqual(revealedRowState.keywordTiles[0].char, 'P');
+
+  // 13d. Kiểm thử hết giờ hàng ngang mà KHÔNG AI trả lời đúng -> Không lật ô chữ, tự chuyển sang hàng tiếp theo
+  crosswordService.openRow(roomCode, 2); // Hàng 2: API
+  crosswordService.onRowTimerExpired(roomCode, 2); // Giả lập hết giờ Hàng 2 mà không ai trả lời đúng
+  const afterTimeoutRow2 = crosswordService.getPublicState(roomCode, false);
+  assert.strictEqual(afterTimeoutRow2.rows[1].status, 'SKIPPED', 'Hàng không ai giải đúng khi hết giờ phải chuyển sang SKIPPED (không lật)');
+  assert.strictEqual(afterTimeoutRow2.rows[1].answer, undefined, 'Hàng không ai giải đúng tuyệt đối không được lộ đáp án');
+  assert.strictEqual(afterTimeoutRow2.keywordTiles[1].isRevealed, false, 'Ký tự từ khóa của hàng không ai giải đúng không được lật mở');
+
+  // 13e. Khi đi qua hết các câu hỏi hàng ngang -> Tự động chuyển sang Vòng Giải Mã Từ Khóa Bí Mật (KEYWORD_ACTIVE)
+  crosswordService.skipRow(roomCode, 3);
+  crosswordService.skipRow(roomCode, 4);
+  const afterAllRows = crosswordService.skipRow(roomCode, 5);
+  assert.strictEqual(afterAllRows.status, 'KEYWORD_ACTIVE', 'Sau khi hết các câu hỏi hàng ngang phải tự động chuyển sang vòng trả lời từ khóa bí mật');
+
+  // 13f. Người chơi trả lời từ khóa bí mật trong vòng từ khóa cuối (hoặc bất cứ lúc nào bằng KEYWORD PARAS) (+500đ, Atomic Winner)
+  const kwWin = fullProcessorWithCrossword.processEvent({
+    id: `${runPrefix}-xw-kw-win`,
+    roomId: roomCode,
+    type: 'COMMENT',
+    user: { id: 'xw-u1', username: 'vinh_dev', nickname: 'VinhDev' },
+    payload: { content: 'PARAS' },
+    receivedAt: Date.now() + 50,
+  }) as any;
+  assert.strictEqual(kwWin.action, 'CROSSWORD_KEYWORD_SOLVED');
+  assert.strictEqual(kwWin.pointsEarned, 500, 'Giải mã đúng từ khóa bí mật phải nhận +500 điểm');
+
+  const finalXwState = crosswordService.getPublicState(roomCode, false);
+  assert.strictEqual(finalXwState.status, 'FINISHED', 'Ván chơi phải kết thúc ngay khi có người giải được từ khóa');
+  assert.strictEqual(finalXwState.keywordWinner.userId, 'xw-u1');
+  assert.strictEqual(finalXwState.leaderboard[0].score, 600, 'Tổng điểm của VinhDev phải là 100 + 500 = 600 điểm');
+  crosswordService.stopGame(roomCode);
+  console.log('[PASS] 13. Giải Mã Ô Chữ (Crossword Battle): Mở hàng ngang, bảo mật đáp án, chấm điểm +100/+20, hé lộ ký tự khóa và giải mã từ khóa +500đ chính xác.');
+
+  console.log('=== TẤT CẢ 13/13 BÀI KIỂM THỬ NGHIỆP VỤ & AI ĐỀU ĐẠT (100% PASS) ===');
 }
 
 runVerificationChecklist().catch((err) => {

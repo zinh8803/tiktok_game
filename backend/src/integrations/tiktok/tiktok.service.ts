@@ -106,6 +106,7 @@ export interface RoomTikTokConnectionInfo {
 export class TikTokService {
   private readonly logger = new Logger(TikTokService.name);
   private readonly connections = new Map<string, RoomTikTokConnectionInfo>();
+  private readonly statusThrottleTimers = new Map<string, NodeJS.Timeout>();
 
   constructor(
     private readonly eventProcessor: EventProcessorService,
@@ -143,9 +144,28 @@ export class TikTokService {
   }
 
   private emitStatus(roomCode: string) {
-    const status = this.getConnectionStatus(roomCode);
-    this.realtime.emitToRoom(roomCode.toUpperCase(), 'tiktok.status', status);
+    const code = roomCode.toUpperCase();
+    const pendingTimer = this.statusThrottleTimers.get(code);
+    if (pendingTimer) {
+      clearTimeout(pendingTimer);
+      this.statusThrottleTimers.delete(code);
+    }
+    const status = this.getConnectionStatus(code);
+    this.realtime.emitToRoom(code, 'tiktok.status', status);
     return status;
+  }
+
+  private emitStatusThrottled(roomCode: string) {
+    const code = roomCode.toUpperCase();
+    if (this.statusThrottleTimers.has(code)) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      this.statusThrottleTimers.delete(code);
+      const status = this.getConnectionStatus(code);
+      this.realtime.emitToRoom(code, 'tiktok.status', status);
+    }, 600);
+    this.statusThrottleTimers.set(code, timer);
   }
 
   /**
@@ -235,7 +255,7 @@ export class TikTokService {
       connection.on(WebcastEvent.CHAT || 'chat', (data: TikTokConnectorChatPayload) => {
         connInfo.eventsReceived++;
         this.handleIncomingChat(code, data);
-        this.emitStatus(code);
+        this.emitStatusThrottled(code);
       });
 
       connection.on(WebcastEvent.GIFT || 'gift', (data: TikTokConnectorGiftPayload) => {
@@ -245,12 +265,17 @@ export class TikTokService {
         }
         connInfo.eventsReceived++;
         this.handleIncomingGift(code, data);
-        this.emitStatus(code);
+        this.emitStatusThrottled(code);
       });
 
       connection.on(WebcastEvent.MEMBER || 'member', (data: TikTokConnectorChatPayload) => {
         connInfo.eventsReceived++;
         this.handleIncomingJoin(code, data);
+      });
+
+      connection.on(WebcastEvent.LIKE || 'like', (data: any) => {
+        connInfo.eventsReceived++;
+        this.handleIncomingLike(code, data);
       });
 
       connection.on(ControlEvent.DISCONNECTED || 'disconnected', () => {
@@ -373,8 +398,10 @@ export class TikTokService {
       u?.avatarThumb?.urlList?.[0],
       u?.avatarThumb?.url?.[0],
       u?.avatarMedium?.urls?.[0],
+      u?.avatarMedium?.urlList?.[0],
       u?.avatarMedium?.url?.[0],
       u?.avatarLarge?.urls?.[0],
+      u?.avatarLarge?.urlList?.[0],
       u?.profilePictureUrl,
       payload?.profilePictureUrl,
       payload?.avatarUrl,
@@ -387,26 +414,51 @@ export class TikTokService {
     return undefined;
   }
 
-  private handleIncomingChat(roomCode: string, payload: TikTokConnectorChatPayload) {
-    const userId = String(
-      payload.user?.id ||
-        payload.user?.userId ||
-        payload.userId ||
-        payload.user?.displayId ||
-        payload.user?.uniqueId ||
-        payload.uniqueId ||
-        uuidv4()
-    );
-    const username = String(
-      payload.user?.displayId ||
-        payload.user?.uniqueId ||
-        payload.uniqueId ||
-        userId
-    );
-    const nickname = String(
-      payload.user?.nickname || payload.nickname || username
-    );
+  private extractUserIdentity(payload: any): {
+    userId: string;
+    username: string;
+    nickname: string;
+    avatarUrl?: string;
+  } {
+    const u = payload?.user || {};
+    const pickValid = (...values: any[]): string | null => {
+      for (const v of values) {
+        if (v !== undefined && v !== null) {
+          const s = String(v).trim();
+          if (s.length > 0 && s !== '0' && s !== 'undefined' && s !== 'null') {
+            return s;
+          }
+        }
+      }
+      return null;
+    };
+
+    const userId =
+      pickValid(
+        u.id,
+        u.idStr,
+        u.userId,
+        payload?.userId,
+        u.secUid,
+        u.displayId,
+        u.uniqueId,
+        payload?.uniqueId,
+        u.nickname,
+        payload?.nickname
+      ) || uuidv4();
+
+    const username =
+      pickValid(u.displayId, u.uniqueId, payload?.uniqueId, u.nickname, payload?.nickname) ||
+      userId;
+
+    const nickname = pickValid(u.nickname, payload?.nickname, username) || username;
     const avatarUrl = this.extractAvatarUrl(payload);
+
+    return { userId, username, nickname, avatarUrl };
+  }
+
+  private handleIncomingChat(roomCode: string, payload: TikTokConnectorChatPayload) {
+    const { userId, username, nickname, avatarUrl } = this.extractUserIdentity(payload);
     const content = String(payload.content ?? payload.comment ?? '');
     const rawMsgId = payload.common?.msgId || payload.msgId;
     const eventId =
@@ -434,28 +486,12 @@ export class TikTokService {
   }
 
   private handleIncomingGift(roomCode: string, payload: TikTokConnectorGiftPayload) {
-    const userId = String(
-      payload.user?.id ||
-        payload.user?.userId ||
-        payload.userId ||
-        payload.user?.displayId ||
-        payload.user?.uniqueId ||
-        payload.uniqueId ||
-        uuidv4()
-    );
-    const username = String(
-      payload.user?.displayId ||
-        payload.user?.uniqueId ||
-        payload.uniqueId ||
-        userId
-    );
-    const nickname = String(
-      payload.user?.nickname || payload.nickname || username
-    );
-    const avatarUrl = this.extractAvatarUrl(payload);
-    const eventId = String(
-      payload.common?.msgId || payload.msgId || `tt-gift-${uuidv4()}`
-    );
+    const { userId, username, nickname, avatarUrl } = this.extractUserIdentity(payload);
+    const rawMsgId = payload.common?.msgId || payload.msgId;
+    const eventId =
+      rawMsgId && String(rawMsgId) !== '0'
+        ? `${rawMsgId}-${userId}`
+        : `tt-gift-${userId}-${uuidv4()}`;
     const giftName = String(
       payload.gift?.name ||
         payload.extendedGiftInfo?.name ||
@@ -492,28 +528,12 @@ export class TikTokService {
   }
 
   private handleIncomingJoin(roomCode: string, payload: TikTokConnectorChatPayload) {
-    const userId = String(
-      payload.user?.id ||
-        payload.user?.userId ||
-        payload.userId ||
-        payload.user?.displayId ||
-        payload.user?.uniqueId ||
-        payload.uniqueId ||
-        uuidv4()
-    );
-    const username = String(
-      payload.user?.displayId ||
-        payload.user?.uniqueId ||
-        payload.uniqueId ||
-        userId
-    );
-    const nickname = String(
-      payload.user?.nickname || payload.nickname || username
-    );
-    const avatarUrl = this.extractAvatarUrl(payload);
-    const eventId = String(
-      payload.common?.msgId || payload.msgId || `tt-join-${uuidv4()}`
-    );
+    const { userId, username, nickname, avatarUrl } = this.extractUserIdentity(payload);
+    const rawMsgId = payload.common?.msgId || payload.msgId;
+    const eventId =
+      rawMsgId && String(rawMsgId) !== '0'
+        ? `${rawMsgId}-${userId}`
+        : `tt-join-${userId}-${uuidv4()}`;
 
     const gameEvent: GameEvent = {
       id: eventId,
@@ -532,6 +552,37 @@ export class TikTokService {
     return this.eventProcessor.processEvent(gameEvent);
   }
 
+  private handleIncomingLike(roomCode: string, payload: any) {
+    const { userId, username, nickname, avatarUrl } = this.extractUserIdentity(payload);
+    const rawMsgId = payload.common?.msgId || payload.msgId;
+    const eventId =
+      rawMsgId && String(rawMsgId) !== '0'
+        ? `${rawMsgId}-${userId}`
+        : `tt-like-${userId}-${uuidv4()}`;
+
+    const likeCount = Math.max(1, Number(payload.likeCount || payload.count || 1));
+    const totalLikes = Number(payload.totalLikeCount || payload.totalLikes || 0);
+
+    const gameEvent: GameEvent = {
+      id: eventId,
+      roomId: roomCode,
+      type: 'LIKE',
+      user: {
+        id: userId,
+        username,
+        nickname,
+        avatarUrl,
+      },
+      payload: {
+        likeCount,
+        totalLikes,
+      },
+      receivedAt: Date.now(),
+    };
+
+    return this.eventProcessor.processEvent(gameEvent);
+  }
+
   // =====================================================================
   // BỘ GIẢ LẬP SỰ KIỆN (SIMULATOR) CHO KIỂM THỬ MVP ĐỘC LẬP (Mục 1.1, 10.1, 14)
   // =====================================================================
@@ -539,13 +590,15 @@ export class TikTokService {
   public simulateEvent(dto: {
     roomCode?: string;
     eventId?: string;
-    type: 'COMMENT' | 'GIFT' | 'JOIN';
+    type: 'COMMENT' | 'GIFT' | 'JOIN' | 'LIKE';
     userId?: string;
     username?: string;
     nickname?: string;
     content?: string;
     giftId?: string;
     giftName?: string;
+    likeCount?: number;
+    totalLikes?: number;
   }) {
     const roomCode = (dto.roomCode || 'KB2026').toUpperCase();
     const userId = dto.userId || `sim-usr-${dto.username || 'player1'}`;
@@ -565,6 +618,8 @@ export class TikTokService {
         content: dto.content,
         giftId: dto.giftId,
         giftName: dto.giftName,
+        likeCount: dto.likeCount,
+        totalLikes: dto.totalLikes,
       },
       receivedAt: Date.now(),
     };

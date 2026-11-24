@@ -766,6 +766,114 @@ class GameSoundService {
       oscHarmonic.stop(startTime + note.duration + 0.02);
     }
   }
+
+  /**
+   * Phát âm thanh bắt đầu trận đấu / mở câu hỏi
+   */
+  public playStartMatch() {
+    const sfxMult = this.computeEffectiveSfxMultiplier();
+    if (sfxMult <= 0) return;
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const notes = [
+      { freq: 523.25, delay: 0, dur: 0.1 },
+      { freq: 659.25, delay: 0.08, dur: 0.1 },
+      { freq: 783.99, delay: 0.16, dur: 0.2 },
+      { freq: 1046.5, delay: 0.26, dur: 0.4 },
+    ];
+    for (const n of notes) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(n.freq, now + n.delay);
+      gain.gain.setValueAtTime(0.24 * sfxMult, now + n.delay);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + n.delay + n.dur);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + n.delay);
+      osc.stop(now + n.delay + n.dur);
+    }
+  }
+
+  /**
+   * Tiếng giật / kéo dây trong Kéo Co
+   */
+  public playPullRope() {
+    const sfxMult = this.computeEffectiveSfxMultiplier();
+    if (sfxMult <= 0) return;
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(340, now);
+    osc.frequency.exponentialRampToValueAtTime(170, now + 0.14);
+    gain.gain.setValueAtTime(0.28 * sfxMult, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.14);
+  }
+
+  /**
+   * Tiếng mở lật ô chữ cái Đuổi Hình Bắt Chữ
+   */
+  public playRevealTile() {
+    const sfxMult = this.computeEffectiveSfxMultiplier();
+    if (sfxMult <= 0) return;
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(900, now);
+    osc.frequency.exponentialRampToValueAtTime(1700, now + 0.08);
+    gain.gain.setValueAtTime(0.25 * sfxMult, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.08);
+  }
+
+  /**
+   * Tiếng kết thúc vinh danh chiến thắng (Fanfare)
+   */
+  public playVictoryFanfare() {
+    const sfxMult = this.computeEffectiveSfxMultiplier();
+    if (sfxMult <= 0) return;
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const fanfare = [
+      { freq: 523.25, time: 0, dur: 0.12 },
+      { freq: 659.25, time: 0.12, dur: 0.12 },
+      { freq: 783.99, time: 0.24, dur: 0.12 },
+      { freq: 1046.5, time: 0.36, dur: 0.4 },
+      { freq: 880.0, time: 0.78, dur: 0.15 },
+      { freq: 1046.5, time: 0.95, dur: 0.6 },
+    ];
+    for (const n of fanfare) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(n.freq, now + n.time);
+      gain.gain.setValueAtTime(0.3 * sfxMult, now + n.time);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + n.time + n.dur);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + n.time);
+      osc.stop(now + n.time + n.dur);
+    }
+  }
 }
 
 export const soundFX = new GameSoundService();

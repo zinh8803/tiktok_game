@@ -54,6 +54,8 @@ export interface GameEvent {
     giftName?: string;
     repeatCount?: number;
     diamondCount?: number;
+    likeCount?: number;
+    totalLikes?: number;
   };
   receivedAt: number;
 }

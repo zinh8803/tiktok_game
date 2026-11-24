@@ -9,11 +9,67 @@ import {
   Post,
   Put,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { DatabaseService } from '../database/database.service';
 import { GameEngineService } from '../game-engine/game-engine.service';
 import { TikTokService } from '../integrations/tiktok/tiktok.service';
 import { OptionLabel, QuestionDifficulty, QuestionStatus } from '../common/types';
+
+const ttsCache = new Map<string, Buffer>();
+
+async function fetchGoogleTtsChunk(textChunk: string, lang = 'vi'): Promise<Buffer> {
+  const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(textChunk)}&tl=${encodeURIComponent(lang)}&client=tw-ob`;
+  const response = await fetch(url, {
+    headers: {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Google TTS error: ${response.status} ${response.statusText}`);
+  }
+  const arrayBuf = await response.arrayBuffer();
+  return Buffer.from(arrayBuf);
+}
+
+function splitTextIntoTtsChunks(text: string, maxLen = 130): string[] {
+  const clean = text.replace(/[*_#`]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (clean.length <= maxLen) return [clean];
+
+  const rawParts = clean.split(/(?<=[.!?,:;\n])/);
+  const chunks: string[] = [];
+  let cur = '';
+
+  for (const part of rawParts) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    if ((cur + ' ' + trimmed).trim().length <= maxLen) {
+      cur = (cur + ' ' + trimmed).trim();
+    } else {
+      if (cur) chunks.push(cur);
+      if (trimmed.length > maxLen) {
+        const words = trimmed.split(' ');
+        let sub = '';
+        for (const w of words) {
+          if ((sub + ' ' + w).trim().length <= maxLen) {
+            sub = (sub + ' ' + w).trim();
+          } else {
+            if (sub) chunks.push(sub);
+            sub = w;
+          }
+        }
+        if (sub) chunks.push(sub);
+        cur = '';
+      } else {
+        cur = trimmed;
+      }
+    }
+  }
+  if (cur) chunks.push(cur);
+  return chunks.length > 0 ? chunks : [clean];
+}
 
 @Controller('api')
 export class ApiController {
@@ -296,6 +352,56 @@ export class ApiController {
   @Post('gifts')
   upsertGift(@Body() body: any) {
     return this.db.upsertGiftMapping(body);
+  }
+
+  // =====================================================================
+  // TTS (TEXT-TO-SPEECH) PROXY ENDPOINT CHO CHỊ GOOGLE & TIẾNG VIỆT
+  // =====================================================================
+
+  @Get('tts')
+  async streamTtsAudio(
+    @Query('text') text: string,
+    @Query('lang') lang = 'vi',
+    @Res() res: Response
+  ) {
+    if (!text || !text.trim()) {
+      return res.status(HttpStatus.BAD_REQUEST).json({ message: 'Missing text parameter' });
+    }
+
+    const clean = text.trim();
+    const cacheKey = `${lang}:${clean}`;
+
+    if (ttsCache.has(cacheKey)) {
+      const cached = ttsCache.get(cacheKey)!;
+      res.setHeader('Content-Type', 'audio/mpeg');
+      res.setHeader('Content-Length', cached.length);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.end(cached);
+    }
+
+    try {
+      const chunks = splitTextIntoTtsChunks(clean);
+      const buffers = await Promise.all(
+        chunks.map((c) => fetchGoogleTtsChunk(c, lang))
+      );
+      const combined = Buffer.concat(buffers);
+
+      if (ttsCache.size > 300) {
+        const firstKey = ttsCache.keys().next().value;
+        if (firstKey) ttsCache.delete(firstKey);
+      }
+      ttsCache.set(cacheKey, combined);
+
+      res.setHeader('Content-Type', 'audio/mpeg');
+      res.setHeader('Content-Length', combined.length);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.end(combined);
+    } catch (err: any) {
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        message: 'TTS generation failed',
+        error: err?.message,
+      });
+    }
   }
 }
 

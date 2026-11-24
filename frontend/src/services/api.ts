@@ -121,5 +121,130 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+
+  // ===== Game: Kéo Co Tri Thức =====
+  tugState: (roomCode = 'KB2026') => request<any>(`/tug/${roomCode}/state`),
+  tugConfig: (roomCode: string, payload: any) =>
+    request<any>(`/tug/${roomCode}/config`, { method: 'PUT', body: JSON.stringify(payload) }),
+  tugLobby: (roomCode = 'KB2026') => request<any>(`/tug/${roomCode}/lobby`, { method: 'POST' }),
+  tugStart: (roomCode = 'KB2026') => request<any>(`/tug/${roomCode}/start`, { method: 'POST' }),
+  tugNext: (roomCode = 'KB2026') => request<any>(`/tug/${roomCode}/next`, { method: 'POST' }),
+  tugFinish: (roomCode = 'KB2026') => request<any>(`/tug/${roomCode}/finish`, { method: 'POST' }),
+  tugStop: (roomCode = 'KB2026') => request<any>(`/tug/${roomCode}/stop`, { method: 'POST' }),
+  tugSimulate: (roomCode: string, payload: { kind: string; coins?: number; team?: string; count?: number }) =>
+    request<any>(`/tug/${roomCode}/simulate`, { method: 'POST', body: JSON.stringify(payload) }),
+
+  // ===== Game: Đuổi Hình Bắt Chữ =====
+  catchwordState: (roomCode = 'KB2026', withSecret = false) =>
+    request<any>(`/catchword/${roomCode}/state${withSecret ? '?secret=1' : ''}`),
+  catchwordConfig: (roomCode: string, payload: any) =>
+    request<any>(`/catchword/${roomCode}/config`, { method: 'PUT', body: JSON.stringify(payload) }),
+  catchwordAddPuzzle: (payload: any) =>
+    request<any>('/catchword/puzzles', { method: 'POST', body: JSON.stringify(payload) }),
+  catchwordLobby: (roomCode = 'KB2026') => request<any>(`/catchword/${roomCode}/lobby`, { method: 'POST' }),
+  catchwordStart: (roomCode = 'KB2026') => request<any>(`/catchword/${roomCode}/start`, { method: 'POST' }),
+  catchwordNext: (roomCode = 'KB2026') => request<any>(`/catchword/${roomCode}/next`, { method: 'POST' }),
+  catchwordRevealLetter: (roomCode = 'KB2026', count = 1) =>
+    request<any>(`/catchword/${roomCode}/reveal-letter`, {
+      method: 'POST',
+      body: JSON.stringify({ count }),
+    }),
+  catchwordUnlockHint: (roomCode = 'KB2026') =>
+    request<any>(`/catchword/${roomCode}/unlock-hint`, { method: 'POST' }),
+  catchwordFinish: (roomCode = 'KB2026') => request<any>(`/catchword/${roomCode}/finish`, { method: 'POST' }),
+  catchwordStop: (roomCode = 'KB2026') => request<any>(`/catchword/${roomCode}/stop`, { method: 'POST' }),
+  catchwordSimulate: (roomCode: string, payload: { kind: string; coins?: number; count?: number }) =>
+    request<any>(`/catchword/${roomCode}/simulate`, { method: 'POST', body: JSON.stringify(payload) }),
+
+  // ===== AI Generation Engine =====
+  getAiStatus: () => request<any>('/ai/status'),
+  generateAiQuestions: (payload: {
+    topic: string;
+    count?: number;
+    difficulty?: string;
+    apiKey?: string;
+    provider?: string;
+    autoPublish?: boolean;
+  }) => request<any>('/ai/generate-questions', { method: 'POST', body: JSON.stringify(payload) }),
+  saveAiQuestions: (payload: { questions: any[]; autoPublish?: boolean }) =>
+    request<any>('/ai/save-questions', { method: 'POST', body: JSON.stringify(payload) }),
+  generateAiCatchwords: (payload: {
+    topic: string;
+    count?: number;
+    apiKey?: string;
+    provider?: string;
+    autoSave?: boolean;
+  }) => request<any>('/ai/generate-catchwords', { method: 'POST', body: JSON.stringify(payload) }),
+  saveAiCatchwords: (payload: { puzzles: any[] }) =>
+    request<any>('/ai/save-catchwords', { method: 'POST', body: JSON.stringify(payload) }),
+  generateAiCrossword: (payload: {
+    topic: string;
+    keyword?: string;
+    apiKey?: string;
+    provider?: string;
+    autoSave?: boolean;
+  }) => request<any>('/ai/generate-crossword', { method: 'POST', body: JSON.stringify(payload) }),
+
+  // ===== Game 4: Giải Mã Ô Chữ (Crossword Battle) =====
+  crosswordListSets: () => request<any[]>('/crossword/question-sets'),
+  crosswordGetSet: (id: string) => request<any>(`/crossword/question-sets/${id}`),
+  crosswordCreateSet: (payload: any) =>
+    request<any>('/crossword/question-sets', { method: 'POST', body: JSON.stringify(payload) }),
+  crosswordUpdateSet: (id: string, payload: any) =>
+    request<any>(`/crossword/question-sets/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  crosswordGenerateBulk: (targetQuestionCount = 1000) =>
+    request<any>('/crossword/generate-bulk', {
+      method: 'POST',
+      body: JSON.stringify({ targetQuestionCount }),
+    }),
+  crosswordRandomSet: (roomCode = 'KB2026') =>
+    request<any>(`/crossword/${roomCode}/random-set`, { method: 'POST' }),
+  crosswordState: (roomCode = 'KB2026', withSecret = false) =>
+    request<any>(`/crossword/${roomCode}/state${withSecret ? '?secret=1' : ''}`),
+  crosswordConfig: (roomCode: string, payload: any) =>
+    request<any>(`/crossword/${roomCode}/config`, { method: 'PUT', body: JSON.stringify(payload) }),
+  crosswordSelectSet: (roomCode: string, questionSetId: string) =>
+    request<any>(`/crossword/${roomCode}/select-set`, {
+      method: 'POST',
+      body: JSON.stringify({ questionSetId }),
+    }),
+  crosswordWaiting: (roomCode = 'KB2026', questionSetId?: string) =>
+    request<any>(`/crossword/${roomCode}/waiting`, {
+      method: 'POST',
+      body: JSON.stringify({ questionSetId }),
+    }),
+  crosswordStart: (roomCode = 'KB2026', questionSetId?: string) =>
+    request<any>(`/crossword/${roomCode}/start`, {
+      method: 'POST',
+      body: JSON.stringify({ questionSetId }),
+    }),
+  crosswordOpenRow: (roomCode: string, rowNumber: number) =>
+    request<any>(`/crossword/${roomCode}/rows/${rowNumber}/open`, { method: 'POST' }),
+  crosswordRevealRow: (roomCode: string, rowNumber: number) =>
+    request<any>(`/crossword/${roomCode}/rows/${rowNumber}/reveal`, { method: 'POST' }),
+  crosswordSkipRow: (roomCode: string, rowNumber: number) =>
+    request<any>(`/crossword/${roomCode}/rows/${rowNumber}/skip`, { method: 'POST' }),
+  crosswordUnlockHint: (
+    roomCode: string,
+    payload: { target?: 'ROW' | 'KEYWORD'; rowNumber?: number },
+  ) =>
+    request<any>(`/crossword/${roomCode}/hint`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  crosswordKeywordFinal: (roomCode = 'KB2026') =>
+    request<any>(`/crossword/${roomCode}/keyword-final`, { method: 'POST' }),
+  crosswordPause: (roomCode = 'KB2026') =>
+    request<any>(`/crossword/${roomCode}/pause`, { method: 'POST' }),
+  crosswordResume: (roomCode = 'KB2026') =>
+    request<any>(`/crossword/${roomCode}/resume`, { method: 'POST' }),
+  crosswordFinish: (roomCode = 'KB2026') =>
+    request<any>(`/crossword/${roomCode}/finish`, { method: 'POST' }),
+  crosswordStop: (roomCode = 'KB2026') =>
+    request<any>(`/crossword/${roomCode}/stop`, { method: 'POST' }),
+  crosswordResetLeaderboard: (roomCode = 'KB2026') =>
+    request<any>(`/crossword/${roomCode}/reset-leaderboard`, { method: 'POST' }),
+  crosswordSimulate: (roomCode: string, payload: { kind: string; count?: number }) =>
+    request<any>(`/crossword/${roomCode}/simulate`, { method: 'POST', body: JSON.stringify(payload) }),
 };
 

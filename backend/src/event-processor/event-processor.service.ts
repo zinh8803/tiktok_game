@@ -1,6 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { GameEngineService } from '../game-engine/game-engine.service';
+import { TugOfWarService } from '../tug-of-war/tug-of-war.service';
+import { CatchwordService } from '../catchword/catchword.service';
+import { CrosswordService } from '../crossword/crossword.service';
 import { GameEvent, OptionLabel } from '../common/types';
 
 @Injectable()
@@ -11,7 +14,10 @@ export class EventProcessorService {
 
   constructor(
     private readonly db: DatabaseService,
-    private readonly gameEngine: GameEngineService
+    private readonly gameEngine: GameEngineService,
+    private readonly tugOfWar: TugOfWarService,
+    @Optional() private readonly catchword?: CatchwordService,
+    @Optional() private readonly crossword?: CrosswordService
   ) {}
 
   /**
@@ -113,28 +119,30 @@ export class EventProcessorService {
       };
     }
 
-    const isUniqueInDb = this.db.recordLiveEventIfUnique({
-      id: event.id,
-      roomId: event.roomId,
-      type: event.type,
-      userId: event.user.id,
-      username: event.user.username,
-      nickname: event.user.nickname,
-      payload: event.payload,
-      receivedAt: event.receivedAt,
-    });
+    if (event.type !== 'JOIN' && event.type !== 'LIKE') {
+      const isUniqueInDb = this.db.recordLiveEventIfUnique({
+        id: event.id,
+        roomId: event.roomId,
+        type: event.type,
+        userId: event.user.id,
+        username: event.user.username,
+        nickname: event.user.nickname,
+        payload: event.payload,
+        receivedAt: event.receivedAt,
+      });
 
-    if (!isUniqueInDb) {
-      this.logger.debug(`Duplicate event ignored (database): ${event.id}`);
-      return {
-        processed: false,
-        reason: 'DUPLICATE_EVENT_ID',
-        eventId: event.id,
-      };
+      if (!isUniqueInDb) {
+        this.logger.debug(`Duplicate event ignored (database): ${event.id}`);
+        return {
+          processed: false,
+          reason: 'DUPLICATE_EVENT_ID',
+          eventId: event.id,
+        };
+      }
     }
 
     this.processedEventIds.add(event.id);
-    if (this.processedEventIds.size > 10000) {
+    if (this.processedEventIds.size > 20000) {
       const firstKey = this.processedEventIds.values().next().value;
       if (firstKey) this.processedEventIds.delete(firstKey);
     }
@@ -150,6 +158,25 @@ export class EventProcessorService {
       }
 
       const normalizedAnswer = this.parseAnswerFromComment(event.payload.content);
+
+      // Game Giải Mã Ô Chữ (Crossword Battle) đang mở -> chiếm quyền xử lý bình luận của phòng
+      if (this.crossword?.isActive(event.roomId)) {
+        const xwResult = this.crossword.handleComment(event);
+        return { processed: true, eventId: event.id, game: 'CROSSWORD', ...xwResult };
+      }
+
+      // Game Đuổi Hình Bắt Chữ đang mở -> chiếm quyền xử lý bình luận của phòng
+      if (this.catchword?.isActive(event.roomId)) {
+        const cwResult = this.catchword.handleComment(event);
+        return { processed: true, eventId: event.id, game: 'CATCHWORD', ...cwResult };
+      }
+
+      // Game Kéo Co Tri Thức đang mở -> chiếm quyền xử lý bình luận của phòng
+      if (this.tugOfWar.isActive(event.roomId)) {
+        const tugResult = this.tugOfWar.handleComment(event, normalizedAnswer);
+        return { processed: true, eventId: event.id, normalizedAnswer, game: 'TUG_OF_WAR', ...tugResult };
+      }
+
       const joinCmd = this.isJoinCommand(event.payload.content);
       const startCmd = this.isStartCommand(event.payload.content);
       const engineResult = this.gameEngine.handleCommentEvent(
@@ -168,6 +195,14 @@ export class EventProcessorService {
     }
 
     if (event.type === 'GIFT') {
+      if (this.catchword?.isActive(event.roomId)) {
+        const cwResult = this.catchword.handleGift(event);
+        return { processed: true, eventId: event.id, game: 'CATCHWORD', ...cwResult };
+      }
+      if (this.tugOfWar.isActive(event.roomId)) {
+        const tugResult = this.tugOfWar.handleGift(event);
+        return { processed: true, eventId: event.id, game: 'TUG_OF_WAR', ...tugResult };
+      }
       const giftResult = this.gameEngine.handleGiftEvent(event);
       return {
         processed: true,
@@ -178,11 +213,27 @@ export class EventProcessorService {
     }
 
     if (event.type === 'JOIN') {
+      if (this.catchword?.isActive(event.roomId)) {
+        return { processed: true, eventId: event.id, game: 'CATCHWORD', action: 'IGNORED_JOIN' };
+      }
+      if (this.tugOfWar.isActive(event.roomId)) {
+        return { processed: true, eventId: event.id, game: 'TUG_OF_WAR', action: 'IGNORED_JOIN' };
+      }
       const engineResult = this.gameEngine.handleCommentEvent(event, null, true);
       return {
         processed: true,
         eventId: event.id,
         ...engineResult,
+      };
+    }
+
+    if (event.type === 'LIKE') {
+      const likeResult = this.gameEngine.handleLikeEvent(event);
+      return {
+        processed: true,
+        eventId: event.id,
+        action: 'LIKE_PROCESSED',
+        likeResult,
       };
     }
 

@@ -11,6 +11,9 @@
       </div>
 
       <nav class="topbar-actions">
+        <router-link to="/" class="btn btn-secondary">
+          <span>🏠 Trang chủ Game</span>
+        </router-link>
         <router-link to="/admin" class="btn btn-secondary">
           <Database :size="17" />
           <span>Ngân Hàng Câu Hỏi ({{ stats.publishedQuestions || 20 }})</span>
@@ -347,6 +350,101 @@
               </div>
             </div>
 
+            <!-- MC Ảo AI Đọc Câu Hỏi Tự Động (Web Speech TTS) -->
+            <div style="margin-bottom: 1.15rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-subtle);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem; flex-wrap: wrap; gap: 0.5rem;">
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                  <span style="font-size: 1.1rem;">🎙️</span>
+                  <strong style="color: #6ee7b7; font-size: 0.92rem;">
+                    MC Ảo AI — Giọng Đọc Câu Hỏi Tự Động
+                  </strong>
+                  <span v-if="voiceIsSpeaking" class="badge badge-purple" style="font-size: 0.7rem; animation: pulse 1.5s infinite;">
+                    🔴 Đang đọc...
+                  </span>
+                </div>
+                <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+                  <button
+                    type="button"
+                    class="btn"
+                    :class="voiceEnabled ? 'btn-cyan' : 'btn-secondary'"
+                    style="padding: 0.25rem 0.7rem; font-size: 0.76rem;"
+                    @click="voiceEnabled = !voiceEnabled"
+                  >
+                    {{ voiceEnabled ? '🟢 MC AI: Đang Bật' : '⚪ MC AI: Đang Tắt' }}
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-secondary"
+                    style="padding: 0.25rem 0.6rem; font-size: 0.76rem;"
+                    :disabled="!voiceEnabled"
+                    @click="testVoice"
+                  >
+                    🎤 Thử giọng
+                  </button>
+                  <button
+                    v-if="voiceIsSpeaking"
+                    type="button"
+                    class="btn btn-purple"
+                    style="padding: 0.25rem 0.6rem; font-size: 0.76rem;"
+                    @click="stopVoice"
+                  >
+                    ⏹ Dừng
+                  </button>
+                </div>
+              </div>
+
+              <div
+                v-if="voiceEnabled"
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; padding: 0.75rem;"
+              >
+                <div class="form-field" style="margin: 0;">
+                  <label style="font-size: 0.78rem; color: #a7f3d0; margin-bottom: 0.25rem; display: block;">
+                    🗣️ Giọng đọc tiếng Việt
+                  </label>
+                  <select
+                    v-model="selectedVoiceURI"
+                    class="select-control"
+                    style="padding: 0.35rem 0.6rem; font-size: 0.78rem; width: 100%;"
+                  >
+                    <option
+                      v-for="v in vietnameseVoices"
+                      :key="v.voiceURI"
+                      :value="v.voiceURI"
+                    >
+                      {{ v.name }}
+                    </option>
+                  </select>
+                  <small style="display: block; margin-top: 0.3rem; font-size: 0.68rem; color: #94a3b8; line-height: 1.3;">
+                    💡 Đã có sẵn <strong>Chị Google TikTok</strong> & <strong>5 phong cách MC AI</strong>. Muốn thêm giọng Microsoft Hoài My/Nam Minh: Mở Windows Settings → Time & Language → Speech → Thêm gói Tiếng Việt.
+                  </small>
+                </div>
+
+                <div class="form-field" style="margin: 0;">
+                  <label style="font-size: 0.78rem; color: #a7f3d0; margin-bottom: 0.25rem; display: flex; justify-content: space-between;">
+                    <span>⚡ Tốc độ đọc câu</span>
+                    <strong style="color: var(--accent-gold);">{{ voiceRate }}x</strong>
+                  </label>
+                  <div style="display: flex; align-items: center; gap: 0.4rem;">
+                    <input
+                      v-model.number="voiceRate"
+                      type="range"
+                      min="0.8"
+                      max="1.4"
+                      step="0.05"
+                      style="flex: 1; accent-color: #10b981; cursor: pointer;"
+                    />
+                  </div>
+                </div>
+
+                <div class="form-field" style="margin: 0; display: flex; align-items: center; grid-column: 1 / -1;">
+                  <label class="checkbox-label" style="font-size: 0.78rem; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;">
+                    <input v-model="readOptions" type="checkbox" style="accent-color: #10b981;" />
+                    <span>Đọc kèm cả 4 phương án A, B, C, D (Nếu tắt chỉ đọc nội dung câu hỏi để giữ nhịp livestream nhanh)</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem;">
               <strong style="color: var(--accent-cyan); font-size: 0.92rem;">
                 🎨 Phong Cách Giao Diện OBS Live (Theme)
@@ -456,7 +554,7 @@
                   v-model.number="dashLayoutCalib.frameWidth"
                   type="range"
                   min="260"
-                  max="640"
+                  max="1400"
                   step="2"
                   style="width: 100%; accent-color: var(--accent-cyan); cursor: pointer;"
                   @input="emitDashLayoutChange"
@@ -472,7 +570,7 @@
                   v-model.number="dashLayoutCalib.frameHeight"
                   type="range"
                   min="320"
-                  max="840"
+                  max="1920"
                   step="2"
                   style="width: 100%; accent-color: var(--accent-cyan); cursor: pointer;"
                   @input="emitDashLayoutChange"
@@ -488,10 +586,10 @@
                   v-model.number="dashLayoutCalib.scale"
                   type="range"
                   min="50"
-                  max="130"
+                  max="150"
                   step="1"
                   style="width: 100%; accent-color: var(--accent-cyan); cursor: pointer;"
-                  @input="emitDashLayoutChange"
+                  @input="broadcastDashCalib"
                 />
               </div>
 
@@ -507,7 +605,7 @@
                   max="35"
                   step="1"
                   style="width: 100%; accent-color: var(--accent-cyan); cursor: pointer;"
-                  @input="emitDashLayoutChange"
+                  @input="broadcastDashCalib"
                 />
               </div>
             </div>
@@ -727,6 +825,56 @@
                 </button>
               </div>
             </div>
+
+            <!-- Giả lập Thả Tim TikTok LIVE (Mục 500 tim & 1.000 tim) -->
+            <div class="sim-likes-strip">
+              <div class="sim-likes-header">
+                <span class="sim-likes-label">
+                  <Heart :size="16" class="icon-rose" />
+                  <strong>Giả lập Thả Tim TikTok LIVE:</strong>
+                </span>
+                <span v-if="roomState?.heartProgress" class="sim-likes-badge tabular-nums">
+                  💖 <strong>{{ roomState.heartProgress.total || roomState.heartProgress.current || 0 }} Tim</strong>
+                  <span class="sim-likes-total">(Tích lũy mốc: {{ roomState.heartProgress.current }}/500)</span>
+                </span>
+              </div>
+              <div class="sim-like-btns">
+                <button
+                  type="button"
+                  class="btn btn-secondary sim-like-btn"
+                  title="Thả 50 tim thử nghiệm tiến độ"
+                  @click="sendSimulatedLikes(50)"
+                >
+                  <span>💖 +50 Tim</span>
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-secondary sim-like-btn"
+                  title="Thả 100 tim"
+                  @click="sendSimulatedLikes(100)"
+                >
+                  <span>💖 +100 Tim</span>
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-rose sim-like-btn"
+                  style="font-weight: 800;"
+                  title="Thả 500 tim: Loại 1 đáp án sai (nếu đang ở Câu hỏi) hoặc Bắt đầu ngay (nếu ở Sảnh chờ) hoặc Chuyển câu tức thì (nếu Reveal)"
+                  @click="sendSimulatedLikes(500)"
+                >
+                  <span>🔥 +500 Tim (Mốc 1: Loại 1 đáp án / Bắt đầu ngay)</span>
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-gold sim-like-btn"
+                  style="font-weight: 800;"
+                  title="Thả 1.000 tim: Chế độ 50/50 & x2 Điểm số hoặc Câu Hỏi Vàng"
+                  @click="sendSimulatedLikes(1000)"
+                >
+                  <span>⚡ +1.000 Tim (Mốc 2: 50/50 & x2 Điểm)</span>
+                </button>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -772,11 +920,26 @@ import {
   Database,
   ExternalLink,
   Eye,
+  Heart,
 } from 'lucide-vue-next';
 import { api } from '../services/api';
 import { createRoomSocket } from '../services/socket';
+import { useAiVoice } from '../composables/useAiVoice';
 import GameShowView from './GameShowView.vue';
 import type { Socket } from 'socket.io-client';
+
+const {
+  voiceEnabled,
+  voiceVolume,
+  voiceRate,
+  readOptions,
+  readExplanation,
+  selectedVoiceURI,
+  vietnameseVoices,
+  isSpeaking: voiceIsSpeaking,
+  testVoice,
+  stop: stopVoice,
+} = useAiVoice();
 
 const roomCode = ref('KB2026');
 const stats = ref<any>({});
@@ -1246,6 +1409,21 @@ async function sendSimulatedGift(gift: any) {
   showToast(`Đã kích hoạt hiệu ứng quà tặng: ${gift.giftName}`, 'success');
 }
 
+async function sendSimulatedLikes(count: number) {
+  try {
+    await api.simulateEvent(roomCode.value, {
+      type: 'LIKE',
+      userId: `sim-${simUser.username}`,
+      username: simUser.username,
+      nickname: simUser.nickname,
+      likeCount: count,
+    });
+    showToast(`Đã giả lập thả ${count} tim thành công!`, 'success');
+  } catch (err: any) {
+    showToast(`Lỗi thả tim giả lập: ${err?.message || err}`, 'error');
+  }
+}
+
 async function copyUrl(url: string) {
   try {
     await navigator.clipboard.writeText(url);
@@ -1287,6 +1465,12 @@ onMounted(async () => {
 
   socket.on('tiktok.status', (status) => {
     tiktokStatus.value = status;
+  });
+
+  socket.on('like.progress', (payload) => {
+    if (roomState.value) {
+      roomState.value.heartProgress = payload;
+    }
   });
 
   socket.on('layout.config', (cfg) => {
@@ -1661,12 +1845,76 @@ onBeforeUnmount(() => {
 }
 
 .sim-quick-answers,
-.sim-gifts-strip {
+.sim-gifts-strip,
+.sim-likes-strip {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
   font-size: 0.84rem;
   color: var(--text-secondary);
+}
+
+.sim-likes-strip {
+  padding: 0.75rem 0.9rem;
+  background: rgba(244, 63, 94, 0.08);
+  border: 1px solid rgba(244, 63, 94, 0.28);
+  border-radius: 0.65rem;
+  gap: 0.6rem;
+}
+
+.sim-likes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.sim-likes-label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #fda4af;
+  font-size: 0.88rem;
+}
+
+.sim-likes-badge {
+  font-size: 0.78rem;
+  color: #fecdd3;
+  background: rgba(244, 63, 94, 0.2);
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(244, 63, 94, 0.4);
+}
+
+.sim-likes-total {
+  opacity: 0.85;
+  margin-left: 0.35rem;
+}
+
+.sim-like-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.sim-like-btn {
+  font-size: 0.82rem;
+  padding: 0.4rem 0.8rem;
+}
+
+.btn-rose {
+  background: linear-gradient(135deg, rgba(225, 29, 72, 0.85), rgba(190, 18, 60, 0.85));
+  border: 1px solid rgba(244, 63, 94, 0.6);
+  color: #ffffff;
+}
+.btn-rose:hover {
+  background: linear-gradient(135deg, rgba(225, 29, 72, 1), rgba(190, 18, 60, 1));
+  box-shadow: 0 0 12px rgba(244, 63, 94, 0.5);
+}
+
+.icon-rose {
+  color: #f43f5e;
 }
 
 .sim-answer-btns,

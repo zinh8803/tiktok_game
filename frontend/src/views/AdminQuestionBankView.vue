@@ -16,12 +16,39 @@
       <div class="topbar-tabs">
         <button
           type="button"
+          class="btn btn-rose"
+          title="Giả lập thả 500 tim vào phòng KB2026 để test mốc loại 1 đáp án sai / chuyển câu"
+          @click="handleSimulateLikes(500)"
+        >
+          <Heart :size="16" />
+          <span>💖 Thả 500 Tim Test</span>
+        </button>
+        <button
+          type="button"
+          class="btn btn-gold"
+          title="Giả lập thả 1.000 tim vào phòng KB2026 để test mốc 50/50 & x2 Điểm"
+          @click="handleSimulateLikes(1000)"
+        >
+          <Heart :size="16" />
+          <span>⚡ Thả 1.000 Tim Test</span>
+        </button>
+        <button
+          type="button"
           class="btn btn-gold"
           :disabled="isGeneratingRandom"
           @click="handleGenerateRandom(10, 'PUBLISHED')"
         >
           <Sparkles :size="16" />
           <span>{{ isGeneratingRandom ? 'Đang tạo...' : '+10 Câu Hỏi Random Ngay' }}</span>
+        </button>
+        <button
+          type="button"
+          class="btn"
+          :class="activeTab === 'ai-generator' ? 'btn-gold' : 'btn-secondary'"
+          @click="activeTab = 'ai-generator'"
+        >
+          <Sparkles :size="16" />
+          <span>✨ AI Sinh Câu Hỏi</span>
         </button>
         <button
           type="button"
@@ -414,6 +441,163 @@
         </div>
       </div>
     </section>
+
+    <!-- TAB 5: AI QUESTION GENERATOR (GEMINI & SMART ENGINE) -->
+    <section v-else-if="activeTab === 'ai-generator'" class="admin-section two-col-admin">
+      <!-- Cột trái: Cấu hình tạo câu hỏi AI -->
+      <div class="panel-card">
+        <div class="flex items-center justify-between mb-3">
+          <h2>✨ AI Biên Soạn Câu Hỏi Tự Động</h2>
+          <span class="badge badge-gold">Gemini / Smart Engine</span>
+        </div>
+        <p class="text-sm text-slate-300 mb-4">
+          Nhập chủ đề bất kỳ, hệ thống AI sẽ tự động sinh các câu hỏi trắc nghiệm chuẩn 4 đáp án kèm lời giải thích chính xác để dùng ngay trong live stream!
+        </p>
+
+        <!-- Chủ đề câu hỏi -->
+        <div class="form-group mb-3">
+          <label class="form-label font-bold text-slate-200">Chủ đề câu hỏi:</label>
+          <input
+            v-model="aiForm.topic"
+            type="text"
+            class="input-control"
+            placeholder="Ví dụ: Lịch sử Việt Nam hào hùng, Đố vui mẹo, Bóng đá, v.v."
+          />
+        </div>
+
+        <!-- Gợi ý chủ đề nhanh -->
+        <div class="topic-suggestions mb-4">
+          <span class="text-xs text-slate-400 block mb-1">Gợi ý chủ đề hot:</span>
+          <div class="suggestion-chips">
+            <button
+              v-for="s in topicSuggestions"
+              :key="s"
+              type="button"
+              class="chip-btn"
+              @click="aiForm.topic = s"
+            >
+              {{ s }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Số lượng câu & Độ khó -->
+        <div class="form-grid-2 mb-3">
+          <div class="form-group">
+            <label class="form-label">Số lượng câu:</label>
+            <select v-model.number="aiForm.count" class="select-control">
+              <option :value="5">5 câu (nhanh)</option>
+              <option :value="10">10 câu (chuẩn)</option>
+              <option :value="15">15 câu</option>
+              <option :value="20">20 câu (trận đấu lớn)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Độ khó mong muốn:</label>
+            <select v-model="aiForm.difficulty" class="select-control">
+              <option value="ALL">Hỗn hợp (Dễ, Vừa, Khó)</option>
+              <option value="EASY">Dễ (EASY)</option>
+              <option value="MEDIUM">Trung bình (MEDIUM)</option>
+              <option value="HARD">Khó (HARD)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Tùy chọn nâng cao API Key -->
+        <div class="form-group mb-4">
+          <label class="form-label">Gemini API Key (Tùy chọn - để trống dùng AI server):</label>
+          <input
+            v-model="aiForm.apiKey"
+            type="password"
+            class="input-control font-mono text-xs"
+            placeholder="AIzaSy... (nếu có riêng)"
+          />
+        </div>
+
+        <!-- Checkbox Auto Publish -->
+        <div class="checkbox-group mb-4">
+          <label class="inline-flex items-center gap-2 cursor-pointer">
+            <input v-model="aiForm.autoPublish" type="checkbox" class="w-4 h-4 accent-cyan-500" />
+            <span class="text-sm font-semibold text-slate-200">
+              Tự động Xuất Bản (PUBLISHED) để chơi ngay trên LIVE
+            </span>
+          </label>
+        </div>
+
+        <button
+          type="button"
+          class="btn btn-gold w-full flex items-center justify-center gap-2 py-3 font-bold"
+          :disabled="isGeneratingAi"
+          @click="handleGenerateAi"
+        >
+          <Sparkles :size="18" />
+          <span>{{ isGeneratingAi ? 'Đang tạo câu hỏi bằng AI...' : '🚀 Bắt Đầu Sinh Câu Hỏi Bằng AI' }}</span>
+        </button>
+      </div>
+
+      <!-- Cột phải: Xem trước danh sách câu hỏi AI vừa sinh -->
+      <div class="panel-card">
+        <div class="flex items-center justify-between mb-3">
+          <h2>📋 Kết Quả Xem Trước ({{ aiGeneratedQuestions.length }} câu)</h2>
+          <div v-if="aiGeneratedQuestions.length > 0" class="flex gap-2">
+            <button
+              type="button"
+              class="btn btn-cyan btn-sm"
+              :disabled="isSavingAi"
+              @click="handleSaveAiQuestions"
+            >
+              <Save :size="15" />
+              <span>Lưu Tất Cả Vào DB</span>
+            </button>
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm"
+              @click="aiGeneratedQuestions = []"
+            >
+              Xóa
+            </button>
+          </div>
+        </div>
+
+        <div v-if="aiGeneratedQuestions.length === 0" class="empty-ai-state">
+          <div class="empty-icon">🤖</div>
+          <h3>Chưa có câu hỏi nào được sinh</h3>
+          <p>Nhập chủ đề ở cột bên trái và bấm <strong>"Bắt Đầu Sinh Câu Hỏi Bằng AI"</strong> để xem kết quả.</p>
+        </div>
+
+        <div v-else class="ai-questions-list tabular-nums">
+          <div
+            v-for="(q, idx) in aiGeneratedQuestions"
+            :key="idx"
+            class="ai-q-card"
+          >
+            <div class="ai-q-header">
+              <span class="q-number">Câu {{ idx + 1 }}</span>
+              <span class="badge" :class="q.difficulty === 'EASY' ? 'badge-green' : q.difficulty === 'HARD' ? 'badge-red' : 'badge-gold'">
+                {{ q.difficulty }}
+              </span>
+              <span class="badge badge-purple">{{ q.categoryName }}</span>
+            </div>
+            <div class="ai-q-content">{{ q.content }}</div>
+            <div class="ai-q-options">
+              <div
+                v-for="(optText, optKey) in q.options"
+                :key="optKey"
+                class="ai-opt-item"
+                :class="{ correct: optKey === q.correctOption }"
+              >
+                <strong>{{ optKey }}.</strong> {{ optText }}
+                <span v-if="optKey === q.correctOption" class="correct-badge">✓ Đúng</span>
+              </div>
+            </div>
+            <div v-if="q.explanation" class="ai-q-exp">
+              💡 <em>{{ q.explanation }}</em>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -427,10 +611,11 @@ import {
   ClipboardCheck,
   Check,
   Save,
+  Heart,
 } from 'lucide-vue-next';
 import { api } from '../services/api';
 
-const activeTab = ref<'questions' | 'create' | 'gifts' | 'reviews'>('questions');
+const activeTab = ref<'questions' | 'create' | 'gifts' | 'reviews' | 'ai-generator'>('questions');
 const categories = ref<any[]>([]);
 const questions = ref<any[]>([]);
 const gifts = ref<any[]>([]);
@@ -438,6 +623,20 @@ const reviews = ref<any[]>([]);
 const statusNotice = ref('');
 const editingQuestionId = ref<string | null>(null);
 const isGeneratingRandom = ref(false);
+
+async function handleSimulateLikes(count: number) {
+  try {
+    await api.simulateEvent('KB2026', {
+      type: 'LIKE',
+      likeCount: count,
+      username: 'admin_tester',
+      nickname: 'Admin Tester ❤️',
+    });
+    statusNotice.value = `💖 Đã giả lập thả ${count} tim thành công vào phòng KB2026!`;
+  } catch (err: any) {
+    statusNotice.value = `Lỗi thả tim: ${err?.message || err}`;
+  }
+}
 
 const filters = reactive({
   search: '',
@@ -472,6 +671,72 @@ const giftForm = reactive({
   rewardPoints: 100,
   displayMessage: 'đã khuấy động sân khấu bằng quà tặng đặc biệt!',
 });
+
+// AI Question Generator State
+const topicSuggestions = [
+  '🇻🇳 Lịch sử Việt Nam hào hùng',
+  '⚽ Bóng đá Ngoại Hạng Anh & Thế giới',
+  '🍜 Ẩm thực & Đặc sản 63 tỉnh thành',
+  '💡 Đố mẹo dân gian & logic',
+  '🌌 Khoa học & Vũ trụ kỳ thú',
+  '📜 Ca dao tục ngữ Việt Nam',
+  '🎵 Âm nhạc & Phim ảnh nổi tiếng',
+];
+
+const aiForm = reactive({
+  topic: '🇻🇳 Lịch sử Việt Nam hào hùng',
+  count: 10,
+  difficulty: 'ALL',
+  apiKey: '',
+  autoPublish: true,
+});
+const isGeneratingAi = ref(false);
+const aiGeneratedQuestions = ref<any[]>([]);
+const isSavingAi = ref(false);
+
+async function handleGenerateAi() {
+  if (!aiForm.topic.trim()) {
+    statusNotice.value = 'Vui lòng nhập chủ đề câu hỏi.';
+    return;
+  }
+  isGeneratingAi.value = true;
+  statusNotice.value = 'Đang kết nối AI sinh câu hỏi, vui lòng chờ trong giây lát...';
+  try {
+    const res = await api.generateAiQuestions({
+      topic: aiForm.topic,
+      count: aiForm.count,
+      difficulty: aiForm.difficulty,
+      apiKey: aiForm.apiKey || undefined,
+      autoPublish: aiForm.autoPublish,
+    });
+    aiGeneratedQuestions.value = res.questions || [];
+    statusNotice.value = `Đã sinh thành công ${res.questions?.length || 0} câu hỏi bằng AI!`;
+    if (aiForm.autoPublish) {
+      await loadQuestions();
+    }
+  } catch (err: any) {
+    statusNotice.value = `Lỗi sinh câu hỏi: ${err.message}`;
+  } finally {
+    isGeneratingAi.value = false;
+  }
+}
+
+async function handleSaveAiQuestions() {
+  if (aiGeneratedQuestions.value.length === 0) return;
+  isSavingAi.value = true;
+  try {
+    const res = await api.saveAiQuestions({
+      questions: aiGeneratedQuestions.value,
+      autoPublish: true,
+    });
+    statusNotice.value = `Đã lưu thành công ${res.savedCount} câu hỏi vào ngân hàng!`;
+    await loadQuestions();
+  } catch (err: any) {
+    statusNotice.value = `Lỗi lưu câu hỏi: ${err.message}`;
+  } finally {
+    isSavingAi.value = false;
+  }
+}
 
 const bulkJsonText = ref(
   JSON.stringify(
@@ -903,9 +1168,136 @@ onMounted(() => {
   gap: 0.25rem;
 }
 
+/* AI Question Generator Styles */
+.topic-suggestions {
+  margin-top: 0.35rem;
+}
+.suggestion-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.chip-btn {
+  padding: 0.28rem 0.6rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  border-radius: 999px;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.chip-btn:hover {
+  background: #334155;
+  border-color: #38bdf8;
+  color: #38bdf8;
+}
+
+.empty-ai-state {
+  padding: 3rem 1.5rem;
+  text-align: center;
+  border: 2px dashed rgba(148, 163, 184, 0.2);
+  border-radius: 1rem;
+  color: #94a3b8;
+}
+.empty-icon {
+  font-size: 2.8rem;
+  margin-bottom: 0.5rem;
+}
+.empty-ai-state h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  margin-bottom: 0.35rem;
+}
+
+.ai-questions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  max-height: 720px;
+  overflow-y: auto;
+  padding-right: 0.35rem;
+}
+.ai-q-card {
+  padding: 0.85rem 1rem;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.ai-q-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+.q-number {
+  color: #38bdf8;
+}
+.ai-q-content {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #f8fafc;
+  line-height: 1.45;
+}
+.ai-q-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+.ai-opt-item {
+  padding: 0.4rem 0.65rem;
+  font-size: 0.84rem;
+  border-radius: 0.45rem;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+}
+.ai-opt-item.correct {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: #10b981;
+  color: #a7f3d0;
+  font-weight: 700;
+}
+.correct-badge {
+  font-size: 0.7rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.25rem;
+  background: #059669;
+  color: #fff;
+}
+.ai-q-exp {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  border-top: 1px dashed rgba(148, 163, 184, 0.15);
+  padding-top: 0.35rem;
+}
+
+.btn-rose {
+  background: linear-gradient(135deg, rgba(225, 29, 72, 0.85), rgba(190, 18, 60, 0.85));
+  border: 1px solid rgba(244, 63, 94, 0.6);
+  color: #ffffff;
+}
+.btn-rose:hover {
+  background: linear-gradient(135deg, rgba(225, 29, 72, 1), rgba(190, 18, 60, 1));
+  box-shadow: 0 0 12px rgba(244, 63, 94, 0.5);
+}
+
 @media (max-width: 900px) {
   .admin-page {
     padding: 1rem 0.85rem 2.5rem;
+  }
+
+  .ai-q-options {
+    grid-template-columns: 1fr;
   }
 
   .filter-bar,

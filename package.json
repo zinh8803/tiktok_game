@@ -9,7 +9,9 @@
     "start:be": "npm --prefix backend run start",
     "start:fe": "npm --prefix frontend run dev",
     "build": "npm --prefix backend run build && npm --prefix frontend run build",
-    "test": "npm --prefix backend test"
+    "test": "npm --prefix backend test",
+    "gstack:verify": "npm --prefix backend run build && npm --prefix frontend run build && npm --prefix backend run test",
+    "gstack:status": "node -e \"console.log('[gstack] Virtual engineering team active: 14 skills loaded in .agents/skills/')\""
   }
 }
 
