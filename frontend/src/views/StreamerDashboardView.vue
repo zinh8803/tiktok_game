@@ -834,8 +834,8 @@
                   <strong>Giả lập Thả Tim TikTok LIVE:</strong>
                 </span>
                 <span v-if="roomState?.heartProgress" class="sim-likes-badge tabular-nums">
-                  Tiến độ: <strong>{{ roomState.heartProgress.current }}/500 Tim</strong>
-                  <span class="sim-likes-total">(Tổng phòng nhận: {{ roomState.heartProgress.total }} Tim)</span>
+                  💖 <strong>{{ roomState.heartProgress.total || roomState.heartProgress.current || 0 }} Tim</strong>
+                  <span class="sim-likes-total">(Tích lũy mốc: {{ roomState.heartProgress.current }}/500)</span>
                 </span>
               </div>
               <div class="sim-like-btns">

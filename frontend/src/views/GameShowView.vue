@@ -449,13 +449,13 @@
           <!-- Thanh tim tích lũy (Heart Goal Pill) -->
           <div
             class="heart-goal-pill"
-            :class="{ 'heart-milestone-ready': heartProgress.current >= 500 }"
+            :class="{ 'heart-milestone-ready': (heartProgress.current || heartProgress.total) >= 500 }"
             :title="heartGoalLabel"
           >
             <span class="heart-pulse-emoji">💖</span>
             <div class="heart-pill-info">
-              <span class="heart-pill-count">{{ (heartProgress.current % 500 === 0 && heartProgress.current > 0) ? 500 : (heartProgress.current % 500) }}/500</span>
-              <span class="heart-pill-label">{{ heartGoalShortLabel }}</span>
+              <span class="heart-pill-count">{{ (heartProgress.total || heartProgress.current || 0) }} Tim</span>
+              <span class="heart-pill-label">{{ heartGoalShortLabel }} (Mốc: {{ (heartProgress.current % 500 === 0 && heartProgress.current > 0) ? 500 : (heartProgress.current % 500) }}/500)</span>
             </div>
             <div class="heart-pill-track">
               <div class="heart-pill-fill" :style="{ width: `${heartPercent}%` }"></div>
@@ -532,7 +532,7 @@
                 <span class="rule-heart-icon">💖</span>
                 <div>
                   <strong>Thả 500 tim</strong>
-                  <p>Bắt đầu ngay ({{ (heartProgress.current % 500 === 0 && heartProgress.current > 0) ? 500 : (heartProgress.current % 500) }}/500)</p>
+                  <p>Bắt đầu ngay (Đã tích lũy: {{ heartProgress.total || heartProgress.current || 0 }} Tim)</p>
                 </div>
               </div>
             </div>

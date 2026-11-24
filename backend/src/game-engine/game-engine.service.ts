@@ -408,8 +408,7 @@ export class GameEngineService {
     runtime.answeredPlayersCurrentQuestion = [];
     runtime.eliminatedHintOption = null;
     runtime.eliminatedOptions = [];
-    runtime.heartCountPhase = 0;
-    runtime.totalLikesReceived = 0;
+    // KHÔNG reset số tim tích lũy (heartCountPhase & totalLikesReceived) để cộng dồn liên tục suốt phiên LIVE
     runtime.isDoublePoints = false;
     runtime.goldenQuestionActive = false;
     runtime.lastQuestionResult = null;
@@ -765,8 +764,7 @@ export class GameEngineService {
     runtime.answeredPlayersCurrentQuestion = [];
     runtime.eliminatedHintOption = null;
     runtime.eliminatedOptions = [];
-    runtime.heartCountPhase = 0;
-    runtime.totalLikesReceived = 0;
+    // KHÔNG reset số tim tích lũy (heartCountPhase & totalLikesReceived) để cộng dồn liên tục suốt phiên LIVE
     runtime.isDoublePoints = false;
     runtime.goldenQuestionActive = false;
     runtime.lastQuestionResult = null;
