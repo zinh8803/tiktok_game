@@ -1,5 +1,5 @@
 <template>
-  <div class="cw-root" :class="{ embedded }">
+  <div class="cw-root" :class="{ embedded, 'layout-mobile': isVertical }">
     <LiveStageCalibrator
       v-if="!embedded"
       mode="floating"
@@ -194,6 +194,9 @@
               <span class="tabular-nums">{{ state.mvp.score }} điểm · Giải đúng {{ state.mvp.solvedCount }} câu</span>
             </div>
           </div>
+          <div v-if="state.config?.autoLoop !== false" class="next-round-countdown">
+            ⏳ Bàn mới với bộ câu hỏi ngẫu nhiên sẽ tự động bắt đầu sau vài giây...
+          </div>
         </div>
       </transition>
     </div>
@@ -215,6 +218,14 @@ const route = useRoute();
 const roomCode = computed(() =>
   String(props.roomCodeProp || route.params.roomCode || 'KB2026').toUpperCase()
 );
+
+const isVertical = computed(() => {
+  if (route.query.layout === 'vertical') return true;
+  if (typeof window !== 'undefined') {
+    return window.innerWidth <= 768 || window.innerHeight > window.innerWidth;
+  }
+  return false;
+});
 
 const isEmbedded = computed(() => {
   if (props.embedded === true) return true;
@@ -355,7 +366,13 @@ onBeforeUnmount(() => {
     radial-gradient(circle at 88% 20%, rgba(236, 72, 153, 0.22), transparent 45%),
     linear-gradient(180deg, #090b24 0%, #160d35 100%);
   color: #ffffff;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.cw-root::-webkit-scrollbar {
+  display: none;
 }
 .cw-root.embedded {
   min-height: 0;
@@ -863,6 +880,17 @@ onBeforeUnmount(() => {
   display: block;
   font-size: 1.2rem;
 }
+.next-round-countdown {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #a5f3fc;
+  background: rgba(6, 182, 212, 0.18);
+  border: 1px solid rgba(6, 182, 212, 0.45);
+  border-radius: 999px;
+  padding: 0.4rem 1rem;
+  margin-top: 0.4rem;
+  animation: pulse 1.2s infinite alternate;
+}
 
 .pop-enter-active,
 .pop-leave-active {
@@ -912,22 +940,258 @@ onBeforeUnmount(() => {
     transform: scale(1) rotate(0);
   }
 }
-@media (max-width: 560px) {
-  .gift-guide,
-  .lb-grid {
-    grid-template-columns: repeat(2, 1fr);
+
+/* =====================================================================
+   MOBILE & VERTICAL LIVE CANVAS (TikTok LIVE 9:16 portrait)
+   ===================================================================== */
+@media (max-width: 768px) {
+  .cw-stage {
+    padding: 0.5rem 0.65rem 1.2rem;
+    gap: 0.45rem;
+    max-width: 100%;
   }
-  .clue-box {
-    min-width: 88px;
-    padding: 0.55rem 0.65rem;
+  .cw-header .title {
+    font-size: clamp(1.2rem, 5vw, 1.65rem);
   }
-  .clue-emoji {
-    font-size: 2.3rem;
+  .cw-card {
+    padding: 0.6rem 0.75rem;
+    border-radius: 0.85rem;
   }
-  .letter-tile {
-    width: 1.9rem;
-    height: 2.2rem;
+  .timer-row {
+    font-size: 0.82rem;
+  }
+  .timer {
     font-size: 1rem;
   }
+  .clues-arena {
+    padding: 0.45rem;
+    gap: 0.35rem;
+  }
+  .clue-box {
+    min-width: 68px;
+    padding: 0.35rem 0.5rem;
+    border-radius: 0.7rem;
+  }
+  .clue-emoji {
+    font-size: clamp(1.8rem, 5.5vw, 2.4rem);
+  }
+  .clue-label {
+    font-size: 0.72rem;
+    margin-top: 0.2rem;
+  }
+  .clue-plus {
+    font-size: 1.2rem;
+  }
+  .word-board {
+    margin-top: 0.55rem;
+    gap: 0.4rem 0.65rem;
+  }
+  .word-group {
+    gap: 0.25rem;
+  }
+  .letter-tile {
+    width: clamp(1.6rem, 5.8vw, 2.15rem);
+    height: clamp(1.9rem, 6.8vw, 2.45rem);
+    font-size: clamp(0.95rem, 3.4vw, 1.2rem);
+    border-radius: 0.45rem;
+  }
+  .free-vote-row {
+    margin-top: 0.4rem;
+  }
+  .fv-text {
+    font-size: 0.74rem;
+  }
+  .hint-banner {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.78rem;
+    margin-top: 0.45rem;
+  }
+  .explanation-box {
+    padding: 0.45rem 0.65rem;
+    font-size: 0.78rem;
+    margin-top: 0.45rem;
+  }
+  .solvers-strip {
+    gap: 0.3rem;
+    margin-top: 0.45rem;
+  }
+  .solver-chip {
+    padding: 0.2rem 0.45rem;
+    font-size: 0.72rem;
+  }
+  .lb-head {
+    margin-bottom: 0.35rem;
+  }
+  .lb-head h3 {
+    font-size: 0.85rem;
+  }
+  .lb-head span {
+    font-size: 0.72rem;
+  }
+  .lb-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.35rem;
+  }
+  .lb-item {
+    padding: 0.3rem 0.45rem;
+    border-radius: 0.55rem;
+    gap: 0.35rem;
+  }
+  .lb-info strong {
+    font-size: 0.75rem;
+  }
+  .lb-info small {
+    font-size: 0.65rem;
+  }
+  .score {
+    font-size: 0.8rem;
+  }
+  .ava {
+    width: 22px;
+    height: 22px;
+  }
+  .gift-guide {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.35rem;
+  }
+  .gift-tier {
+    padding: 0.3rem 0.45rem;
+    border-radius: 0.6rem;
+    gap: 0.35rem;
+  }
+  .g-icon {
+    font-size: 1.15rem;
+  }
+  .gift-tier strong {
+    font-size: 0.7rem;
+  }
+  .gift-tier small {
+    font-size: 0.62rem;
+  }
 }
+
+.layout-mobile .cw-stage {
+  padding: 0.5rem 0.65rem 1.2rem;
+  gap: 0.45rem;
+  max-width: 100%;
+}
+.layout-mobile .cw-header .title {
+  font-size: clamp(1.2rem, 5vw, 1.65rem);
+}
+.layout-mobile .cw-card {
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.85rem;
+}
+.layout-mobile .timer-row {
+  font-size: 0.82rem;
+}
+.layout-mobile .timer {
+  font-size: 1rem;
+}
+.layout-mobile .clues-arena {
+  padding: 0.45rem;
+  gap: 0.35rem;
+}
+.layout-mobile .clue-box {
+  min-width: 68px;
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.7rem;
+}
+.layout-mobile .clue-emoji {
+  font-size: clamp(1.8rem, 5.5vw, 2.4rem);
+}
+.layout-mobile .clue-label {
+  font-size: 0.72rem;
+  margin-top: 0.2rem;
+}
+.layout-mobile .clue-plus {
+  font-size: 1.2rem;
+}
+.layout-mobile .word-board {
+  margin-top: 0.55rem;
+  gap: 0.4rem 0.65rem;
+}
+.layout-mobile .word-group {
+  gap: 0.25rem;
+}
+.layout-mobile .letter-tile {
+  width: clamp(1.6rem, 5.8vw, 2.15rem);
+  height: clamp(1.9rem, 6.8vw, 2.45rem);
+  font-size: clamp(0.95rem, 3.4vw, 1.2rem);
+  border-radius: 0.45rem;
+}
+.layout-mobile .free-vote-row {
+  margin-top: 0.4rem;
+}
+.layout-mobile .fv-text {
+  font-size: 0.74rem;
+}
+.layout-mobile .hint-banner {
+  padding: 0.4rem 0.6rem;
+  font-size: 0.78rem;
+  margin-top: 0.45rem;
+}
+.layout-mobile .explanation-box {
+  padding: 0.45rem 0.65rem;
+  font-size: 0.78rem;
+  margin-top: 0.45rem;
+}
+.layout-mobile .solvers-strip {
+  gap: 0.3rem;
+  margin-top: 0.45rem;
+}
+.layout-mobile .solver-chip {
+  padding: 0.2rem 0.45rem;
+  font-size: 0.72rem;
+}
+.layout-mobile .lb-head {
+  margin-bottom: 0.35rem;
+}
+.layout-mobile .lb-head h3 {
+  font-size: 0.85rem;
+}
+.layout-mobile .lb-head span {
+  font-size: 0.72rem;
+}
+.layout-mobile .lb-grid {
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.35rem;
+}
+.layout-mobile .lb-item {
+  padding: 0.3rem 0.45rem;
+  border-radius: 0.55rem;
+  gap: 0.35rem;
+}
+.layout-mobile .lb-info strong {
+  font-size: 0.75rem;
+}
+.layout-mobile .lb-info small {
+  font-size: 0.65rem;
+}
+.layout-mobile .score {
+  font-size: 0.8rem;
+}
+.layout-mobile .ava {
+  width: 22px;
+  height: 22px;
+}
+.layout-mobile .gift-guide {
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.35rem;
+}
+.layout-mobile .gift-tier {
+  padding: 0.3rem 0.45rem;
+  border-radius: 0.6rem;
+  gap: 0.35rem;
+}
+.layout-mobile .g-icon {
+  font-size: 1.15rem;
+}
+.layout-mobile .gift-tier strong {
+  font-size: 0.7rem;
+}
+.layout-mobile .gift-tier small {
+  font-size: 0.62rem;
+}
+
 </style>

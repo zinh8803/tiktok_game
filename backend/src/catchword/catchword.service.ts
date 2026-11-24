@@ -82,6 +82,7 @@ interface CatchwordRuntime {
     timePerPuzzle: number;
     revealSeconds: number;
     autoRevealAfterSolvers: number;
+    autoLoop?: boolean;
   };
   autoRevealScheduled: boolean;
   timers: NodeJS.Timeout[];
@@ -607,6 +608,397 @@ export const DEFAULT_PUZZLES: CatchwordPuzzle[] = [
     hint: '5 chữ nhắc nhở phải biết quý trọng từng giây phút',
     explanation: 'Câu nói nổi tiếng nhấn mạnh giá trị vô giá của thời gian.',
   },
+  // === Thành ngữ & Tục ngữ dân gian ===
+  {
+    id: 'cw-39',
+    category: 'Thành ngữ dân gian',
+    difficulty: 'EASY',
+    clues: [
+      { emoji: '💧', label: 'Uống nước' },
+      { emoji: '🏞️', label: 'Nhớ nguồn' },
+    ],
+    answer: 'UỐNG NƯỚC NHỚ NGUỒN',
+    hint: 'Đạo lý biết ơn nguồn cội, tổ tiên của dân tộc Việt',
+    explanation: 'Truyền thống tri ân người đi trước đã tạo dựng thành quả cho thế hệ sau.',
+  },
+  {
+    id: 'cw-40',
+    category: 'Thành ngữ dân gian',
+    difficulty: 'EASY',
+    clues: [
+      { emoji: '🍎', label: 'Ăn quả' },
+      { emoji: '🌳', label: 'Trồng cây' },
+    ],
+    answer: 'ĂN QUẢ NHỚ KẺ TRỒNG CÂY',
+    hint: 'Lời khuyên luôn ghi nhớ công ơn người giúp đỡ mình',
+    explanation: 'Thành ngữ răn dạy lòng biết ơn đối với người có công nuôi dưỡng, gầy dựng.',
+  },
+  {
+    id: 'cw-41',
+    category: 'Thành ngữ dân gian',
+    difficulty: 'MEDIUM',
+    clues: [
+      { emoji: '🍃', label: 'Lá lành' },
+      { emoji: '🍂', label: 'Lá rách' },
+    ],
+    answer: 'LÁ LÀNH ĐÙM LÁ RÁCH',
+    hint: 'Tinh thần tương thân tương ái, cưu mang đùm bọc lẫn nhau',
+    explanation: 'Biểu tượng của lòng nhân ái, sẻ chia khi đồng bào gặp hoạn nạn khó khăn.',
+  },
+  {
+    id: 'cw-42',
+    category: 'Thành ngữ dân gian',
+    difficulty: 'MEDIUM',
+    clues: [
+      { emoji: '🌊', label: 'Nước chảy' },
+      { emoji: '🪨', label: 'Đá mòn' },
+    ],
+    answer: 'NƯỚC CHẢY ĐÁ MÒN',
+    hint: 'Sự kiên trì, bền bỉ qua năm tháng sẽ làm nên kỳ tích',
+    explanation: 'Ý chí bền bỉ dù việc khó đến đâu thì cuối cùng cũng sẽ thành công.',
+  },
+  {
+    id: 'cw-43',
+    category: 'Thành ngữ dân gian',
+    difficulty: 'HARD',
+    clues: [
+      { emoji: '🗡️', label: 'Mài sắt' },
+      { emoji: '🪡', label: 'Nên kim' },
+    ],
+    answer: 'CÓ CÔNG MÀI SẮT CÓ NGÀY NÊN KIM',
+    hint: 'Chỉ cần nhẫn nại rèn luyện thì nhất định có ngày thành tài',
+    explanation: 'Bài học về lòng kiên trì và nghị lực vượt khó.',
+  },
+  {
+    id: 'cw-44',
+    category: 'Thành ngữ dân gian',
+    difficulty: 'EASY',
+    clues: [
+      { emoji: '🐱', label: 'Mèo' },
+      { emoji: '🐭', label: 'Chuột' },
+    ],
+    answer: 'MÈO BẮT CHUỘT',
+    hint: 'Hình ảnh quen thuộc trong nhà, một loài bắt một loài',
+    explanation: 'Bản năng tự nhiên của mèo trong việc săn bắt chuột bảo vệ mùa màng.',
+  },
+  {
+    id: 'cw-45',
+    category: 'Thành ngữ dân gian',
+    difficulty: 'MEDIUM',
+    clues: [
+      { emoji: '🧗', label: 'Khó khăn' },
+      { emoji: '💡', label: 'Khôn ngoan' },
+    ],
+    answer: 'CÁI KHÓ LÓ CÁI KHÔN',
+    hint: 'Trong hoàn cảnh ngặt nghèo con người lại nảy ra giải pháp sáng tạo',
+    explanation: 'Nghịch cảnh thúc đẩy trí thông minh và khả năng thích ứng của con người.',
+  },
+  // === Ẩm thực & Đời sống quen thuộc ===
+  {
+    id: 'cw-46',
+    category: 'Ẩm thực & Đời sống',
+    difficulty: 'EASY',
+    clues: [
+      { emoji: '🍜', label: 'Bát phở' },
+      { emoji: '🐂', label: 'Con bò' },
+    ],
+    answer: 'PHỞ BÒ',
+    hint: 'Món ăn quốc hồn quốc túy của Việt Nam với nước dùng thơm mùi quế hồi',
+    explanation: 'Phở bò Hà Nội và Nam Định là hai phong cách phở nổi tiếng bậc nhất.',
+  },
+  {
+    id: 'cw-47',
+    category: 'Ẩm thực & Đời sống',
+    difficulty: 'EASY',
+    clues: [
+      { emoji: '🎋', label: 'Lá dong' },
+      { emoji: '🟩', label: 'Bánh vuông' },
+      { emoji: '🥩', label: 'Thịt đỗ' },
+    ],
+    answer: 'BÁNH CHƯNG',
+    hint: 'Món bánh vuông truyền thống không thể thiếu trong ngày Tết cổ truyền',
+    explanation: 'Bánh chưng hình vuông tượng trưng cho Đất theo truyền thuyết Lang Liêu.',
+  },
+  {
+    id: 'cw-48',
+    category: 'Ẩm thực & Đời sống',
+    difficulty: 'EASY',
+    clues: [
+      { emoji: '🧋', label: 'Trà sữa' },
+      { emoji: '⚫', label: 'Trân châu' },
+    ],
+    answer: 'TRÀ SỮA TRÂN CHÂU',
+    hint: 'Thức uống gây sốt của giới trẻ với các hạt dai ngon',
+    explanation: 'Trà sữa kết hợp các viên bột năng caramen giòn dai hấp dẫn.',
+  },
+  {
+    id: 'cw-49',
+    category: 'Ẩm thực & Đời sống',
+    difficulty: 'MEDIUM',
+    clues: [
+      { emoji: '🍚', label: 'Cơm' },
+      { emoji: '🪵', label: 'Ống tre' },
+    ],
+    answer: 'CƠM LAM',
+    hint: 'Đặc sản vùng cao nấu gạo nếp trong ống tre nứa thơm lừng',
+    explanation: 'Cơm lam là nét văn hóa ẩm thực độc đáo của đồng bào vùng Tây Bắc và Tây Nguyên.',
+  },
+  {
+    id: 'cw-50',
+    category: 'Ẩm thực & Đời sống',
+    difficulty: 'EASY',
+    clues: [
+      { emoji: '🐟', label: 'Cá' },
+      { emoji: '🏺', label: 'Nước cốt' },
+    ],
+    answer: 'NƯỚC MẮM',
+    hint: 'Gia vị truyền thống đậm đà trong bữa cơm của mọi gia đình Việt',
+    explanation: 'Nước mắm ủ từ cá cơm tươi và muối biển nguyên chất.',
+  },
+  // === Vật dụng & Công nghệ ===
+  {
+    id: 'cw-51',
+    category: 'Vật dụng đời sống',
+    difficulty: 'EASY',
+    clues: [
+      { emoji: '🚲', label: 'Xe đạp' },
+      { emoji: '⚡', label: 'Điện' },
+    ],
+    answer: 'XE ĐẠP ĐIỆN',
+    hint: 'Phương tiện 2 bánh chạy bằng ắc quy rất phổ biến với học sinh',
+    explanation: 'Xe đạp điện thân thiện với môi trường và tiện dụng khi di chuyển gần.',
+  },
+  {
+    id: 'cw-52',
+    category: 'Vật dụng đời sống',
+    difficulty: 'EASY',
+    clues: [
+      { emoji: '📱', label: 'Điện thoại' },
+      { emoji: '🧠', label: 'Thông minh' },
+    ],
+    answer: 'ĐIỆN THOẠI THÔNG MINH',
+    hint: 'Vật bất ly thân hiện đại có màn hình cảm ứng kết nối Internet',
+    explanation: 'Smartphone kết hợp máy tính cầm tay và các tính năng liên lạc tiện lợi.',
+  },
+  {
+    id: 'cw-53',
+    category: 'Vật dụng đời sống',
+    difficulty: 'MEDIUM',
+    clues: [
+      { emoji: '🎧', label: 'Tai nghe' },
+      { emoji: '📶', label: 'Không dây' },
+    ],
+    answer: 'TAI NGHE KHÔNG DÂY',
+    hint: 'Thiết bị nghe nhạc Bluetooth gọn nhẹ đeo vào tai',
+    explanation: 'Tai nghe True Wireless (TWS) mang lại sự tiện nghi không vướng víu dây cáp.',
+  },
+  {
+    id: 'cw-54',
+    category: 'Vật dụng đời sống',
+    difficulty: 'MEDIUM',
+    clues: [
+      { emoji: '⏳', label: 'Đồng hồ' },
+      { emoji: '🏖️', label: 'Cát' },
+    ],
+    answer: 'ĐỒNG HỒ CÁT',
+    hint: 'Dụng cụ đo thời gian cổ xưa bằng các hạt cát chảy qua eo hẹp',
+    explanation: 'Đồng hồ cát đo thời gian dựa vào lượng cát chảy từ bầu trên xuống bầu dưới.',
+  },
+  {
+    id: 'cw-55',
+    category: 'Vật dụng đời sống',
+    difficulty: 'HARD',
+    clues: [
+      { emoji: '🪜', label: 'Thang' },
+      { emoji: '🏢', label: 'Máy / Tòa nhà' },
+    ],
+    answer: 'CẦU THANG MÁY',
+    hint: 'Thiết bị vận chuyển người lên xuống giữa các tầng trong tòa nhà cao tầng',
+    explanation: 'Thang máy giúp việc di chuyển trong các tòa cao ốc nhanh chóng và dễ dàng.',
+  },
+  // === Địa danh & Danh lam thắng cảnh ===
+  {
+    id: 'cw-56',
+    category: 'Địa danh Việt Nam',
+    difficulty: 'EASY',
+    clues: [
+      { emoji: '🐢', label: 'Rùa thần' },
+      { emoji: '🗡️', label: 'Thanh gươm' },
+    ],
+    answer: 'HỒ GƯƠM',
+    hint: 'Hồ Hoàn Kiếm giữa lòng thủ đô Hà Nội gắn với truyền thuyết trả gươm báu',
+    explanation: 'Lê Lợi sau khi đánh thắng giặc Minh đã hoàn trả thanh gươm thần cho Rùa Vàng tại đây.',
+  },
+  {
+    id: 'cw-57',
+    category: 'Địa danh Việt Nam',
+    difficulty: 'EASY',
+    clues: [
+      { emoji: '🏖️', label: 'Bãi biển' },
+      { emoji: '🌊', label: 'Thành phố biển Khánh Hòa' },
+    ],
+    answer: 'NHA TRANG',
+    hint: 'Thành phố biển xinh đẹp với bãi cát dài và cáp treo vượt biển nổi tiếng',
+    explanation: 'Vịnh Nha Trang được công nhận là một trong những vịnh biển đẹp nhất thế giới.',
+  },
+  {
+    id: 'cw-58',
+    category: 'Địa danh Việt Nam',
+    difficulty: 'MEDIUM',
+    clues: [
+      { emoji: '🌸', label: 'Thành phố hoa' },
+      { emoji: '🌲', label: 'Rừng thông' },
+      { emoji: '🥶', label: 'Sương mù' },
+    ],
+    answer: 'ĐÀ LẠT',
+    hint: 'Thành phố ngàn hoa xứ sở sương mù trên cao nguyên Lâm Viên',
+    explanation: 'Đà Lạt nổi tiếng với khí hậu mát mẻ quanh năm và phong cảnh lãng mạn.',
+  },
+  {
+    id: 'cw-59',
+    category: 'Địa danh Việt Nam',
+    difficulty: 'MEDIUM',
+    clues: [
+      { emoji: '🏔️', label: 'Dãy núi' },
+      { emoji: '❄️', label: 'Băng tuyết / Fansipan' },
+    ],
+    answer: 'SA PA',
+    hint: 'Thị xã vùng cao Lào Cai nơi có đỉnh Fansipan nóc nhà Đông Dương',
+    explanation: 'Sa Pa thu hút khách du lịch với ruộng bậc thang kỳ vĩ và mùa đông tuyết rơi.',
+  },
+  {
+    id: 'cw-60',
+    category: 'Địa danh Việt Nam',
+    difficulty: 'EASY',
+    clues: [
+      { emoji: '⚓', label: 'Vũng / Mỏ neo' },
+      { emoji: '⛵', label: 'Con tàu' },
+    ],
+    answer: 'VŨNG TÀU',
+    hint: 'Thành phố biển Đông Nam Bộ có tượng Chúa Kito và ngọn hải đăng cổ',
+    explanation: 'Vũng Tàu là điểm đến nghỉ dưỡng biển hàng đầu của người dân miền Nam.',
+  },
+  // === Tự nhiên & Động thực vật ===
+  {
+    id: 'cw-61',
+    category: 'Khoa học & Tự nhiên',
+    difficulty: 'EASY',
+    clues: [
+      { emoji: '🌻', label: 'Hoa vàng' },
+      { emoji: '☀️', label: 'Mặt trời' },
+    ],
+    answer: 'HOA HƯỚNG DƯƠNG',
+    hint: 'Loài hoa luôn hướng về phía ánh sáng mặt trời',
+    explanation: 'Hoa hướng dương có tính hướng nhật động trong giai đoạn phát triển.',
+  },
+  {
+    id: 'cw-62',
+    category: 'Khoa học & Tự nhiên',
+    difficulty: 'EASY',
+    clues: [
+      { emoji: '⭐', label: 'Ngôi sao' },
+      { emoji: '🌠', label: 'Vệt sáng băng qua' },
+    ],
+    answer: 'SAO BĂNG',
+    hint: 'Vệt sáng vụt qua trên bầu trời đêm khi các thiên thạch cọ xát bầu khí quyển',
+    explanation: 'Người ta thường ước một điều may mắn khi nhìn thấy vệt sao băng.',
+  },
+  {
+    id: 'cw-63',
+    category: 'Khoa học & Tự nhiên',
+    difficulty: 'MEDIUM',
+    clues: [
+      { emoji: '🌋', label: 'Ngọn núi' },
+      { emoji: '🔥', label: 'Dung nham' },
+    ],
+    answer: 'NÚI LỬA',
+    hint: 'Miệng núi phun trào dung nham đỏ rực từ lòng đất',
+    explanation: 'Núi lửa hình thành do sự dịch chuyển của các mảng kiến tạo lớp vỏ Trái Đất.',
+  },
+  {
+    id: 'cw-64',
+    category: 'Khoa học & Tự nhiên',
+    difficulty: 'HARD',
+    clues: [
+      { emoji: '🌊', label: 'Sóng lớn' },
+      { emoji: '💥', label: 'Động đất ngầm' },
+    ],
+    answer: 'SÓNG THẦN',
+    hint: 'Cơn sóng khổng lồ từ đại dương gây ra bởi động đất dưới đáy biển',
+    explanation: 'Sóng thần (Tsunami) di chuyển với tốc độ hàng trăm km/h trên đại dương.',
+  },
+  {
+    id: 'cw-65',
+    category: 'Động vật kỳ thú',
+    difficulty: 'EASY',
+    clues: [
+      { emoji: '🦚', label: 'Chim xòe đuôi' },
+      { emoji: '👑', label: 'Lộng lẫy' },
+    ],
+    answer: 'CON CÔNG',
+    hint: 'Loài chim có bộ lông đuôi xòe tròn như chiếc quạt sặc sỡ',
+    explanation: 'Công đực xòe đuôi rực rỡ để quyến rũ bạn tình trong mùa sinh sản.',
+  },
+  {
+    id: 'cw-66',
+    category: 'Động vật kỳ thú',
+    difficulty: 'MEDIUM',
+    clues: [
+      { emoji: '🕊️', label: 'Chim bay' },
+      { emoji: '🌸', label: 'Báo hiệu mùa xuân' },
+    ],
+    answer: 'CHIM ÉN',
+    hint: 'Cánh chim chao lượn báo hiệu mùa xuân về trên mọi nẻo đường',
+    explanation: 'Cánh én mùa xuân là biểu tượng của sự may mắn, ấm áp và khởi đầu mới.',
+  },
+  {
+    id: 'cw-67',
+    category: 'Từ ghép thú vị',
+    difficulty: 'EASY',
+    clues: [
+      { emoji: '🛡️', label: 'Bảo vệ' },
+      { emoji: '🏥', label: 'Y tế sức khỏe' },
+    ],
+    answer: 'BẢO HIỂM Y TẾ',
+    hint: 'Chính sách an sinh xã hội giúp hỗ trợ chi phí khám chữa bệnh',
+    explanation: 'Bảo hiểm y tế giúp chia sẻ rủi ro tài chính khi người dân đau ốm, bệnh tật.',
+  },
+  {
+    id: 'cw-68',
+    category: 'Từ ghép thú vị',
+    difficulty: 'MEDIUM',
+    clues: [
+      { emoji: '⚽', label: 'Bóng đá' },
+      { emoji: '🥅', label: 'Khung thành' },
+    ],
+    answer: 'THỦ MÔN',
+    hint: 'Người gác đền trấn giữ khung thành trong môn thể thao vua',
+    explanation: 'Thủ môn là cầu thủ duy nhất được dùng tay chơi bóng trong vòng cấm địa.',
+  },
+  {
+    id: 'cw-69',
+    category: 'Từ ghép thú vị',
+    difficulty: 'HARD',
+    clues: [
+      { emoji: '🎓', label: 'Mũ tốt nghiệp' },
+      { emoji: '📜', label: 'Bằng cấp cao nhất' },
+    ],
+    answer: 'TIẾN SĨ',
+    hint: 'Học vị cao nhất trong hệ thống giáo dục đại học',
+    explanation: 'Người bảo vệ thành công luận án tiến sĩ được công nhận học vị Tiến sĩ.',
+  },
+  {
+    id: 'cw-70',
+    category: 'Từ ghép thú vị',
+    difficulty: 'EASY',
+    clues: [
+      { emoji: '🚒', label: 'Xe cứu hỏa' },
+      { emoji: '🧯', label: 'Dập lửa' },
+    ],
+    answer: 'CỨU HỎA',
+    hint: 'Lực lượng dũng cảm xông pha dập tắt các đám cháy cứu nạn',
+    explanation: 'Lính cứu hỏa luôn túc trực 24/7 để bảo vệ an toàn tính mạng cho người dân.',
+  },
 ];
 
 @Injectable()
@@ -692,6 +1084,15 @@ export class CatchwordService {
     return picked.length;
   }
 
+  private shuffleArray<T>(array: T[]): T[] {
+    const arr = [...array];
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
   private getRuntime(roomCode: string): CatchwordRuntime {
     const code = (roomCode || 'KB2026').toUpperCase();
     let rt = this.rooms.get(code);
@@ -718,6 +1119,7 @@ export class CatchwordService {
           timePerPuzzle: 30,
           revealSeconds: 6,
           autoRevealAfterSolvers: 5,
+          autoLoop: true,
         },
         autoRevealScheduled: false,
         timers: [],
@@ -903,6 +1305,7 @@ export class CatchwordService {
       timePerPuzzle: number;
       revealSeconds: number;
       autoRevealAfterSolvers: number;
+      autoLoop: boolean;
     }>
   ) {
     const rt = this.getRuntime(roomCode);
@@ -914,6 +1317,7 @@ export class CatchwordService {
         1,
         Math.min(50, Number(cfg.autoRevealAfterSolvers ?? rt.config.autoRevealAfterSolvers))
       ),
+      autoLoop: cfg.autoLoop !== undefined ? Boolean(cfg.autoLoop) : (rt.config.autoLoop ?? true),
     };
     this.broadcast(rt, true);
     return this.getPublicState(rt.roomCode, true);
@@ -954,9 +1358,8 @@ export class CatchwordService {
     }
     this.clearTimers(rt);
 
-    // Ưu tiên câu tự tạo lên trước, xáo trộn các câu mặc định
-    const defaultShuffled = [...DEFAULT_PUZZLES].sort(() => Math.random() - 0.5);
-    const pool = [...this.customPuzzles, ...defaultShuffled];
+    // Xáo trộn ngẫu nhiên toàn bộ câu hỏi (bao gồm câu tự tạo & câu mặc định) bằng Fisher-Yates
+    const pool = this.shuffleArray([...this.customPuzzles, ...DEFAULT_PUZZLES]);
     rt.puzzles = pool.slice(0, Math.min(pool.length, rt.config.puzzleCount));
     rt.puzzleIndex = -1;
     rt.doubleUntilIndex = -1;
@@ -1057,6 +1460,20 @@ export class CatchwordService {
         ? `🏆 Vua Đuổi Hình Bắt Chữ: ${state.mvp.nickname} (${state.mvp.score}đ)!`
         : '🏁 Trận Đuổi Hình Bắt Chữ đã kết thúc!',
     });
+
+    // Tự động lặp lại ván mới với bộ câu hỏi ngẫu nhiên mới nếu bật autoLoop
+    if (rt.config.autoLoop !== false) {
+      this.emitEffect(rt, {
+        kind: 'SYSTEM',
+        message: '⏳ Bàn mới với bộ câu hỏi ngẫu nhiên sẽ tự động bắt đầu sau 6 giây...',
+      });
+      rt.timers.push(
+        setTimeout(() => {
+          this.start(rt.roomCode);
+        }, 6000)
+      );
+    }
+
     return state;
   }
 
@@ -1191,6 +1608,11 @@ export class CatchwordService {
         rt.autoRevealScheduled = true;
         this.clearTimers(rt);
         rt.timers.push(setTimeout(() => this.reveal(rt.roomCode), 1200));
+      } else if (order === 1 && !rt.autoRevealScheduled) {
+        // Có người đầu tiên giải đúng -> ân hạn 3.5s cho các comment gửi cùng lúc, sau đó tự động sang câu tiếp theo
+        rt.autoRevealScheduled = true;
+        this.clearTimers(rt);
+        rt.timers.push(setTimeout(() => this.reveal(rt.roomCode), 3500));
       }
 
       this.broadcast(rt, true);

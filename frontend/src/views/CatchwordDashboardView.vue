@@ -166,6 +166,12 @@
               <label>Tự công bố khi có N người đúng</label>
               <input v-model.number="configForm.autoRevealAfterSolvers" type="number" min="1" max="50" class="input-control" />
             </div>
+            <div class="form-field checkbox-field" style="grid-column: 1 / -1; display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem;">
+              <input id="cw-auto-loop" v-model="configForm.autoLoop" type="checkbox" style="width: 18px; height: 18px; cursor: pointer;" />
+              <label for="cw-auto-loop" style="margin: 0; cursor: pointer; font-weight: 700; color: #38bdf8;">
+                🔄 Tự động chơi liên tục (tự động qua câu &amp; lặp bàn mới ngẫu nhiên)
+              </label>
+            </div>
           </div>
 
           <div class="control-actions-wrap">
@@ -439,6 +445,7 @@ const configForm = reactive({
   timePerPuzzle: 30,
   revealSeconds: 6,
   autoRevealAfterSolvers: 5,
+  autoLoop: true,
 });
 
 const puzzleForm = reactive({
@@ -536,6 +543,7 @@ function applyCwState(s: any, syncConfig = false) {
     configForm.timePerPuzzle = s.config.timePerPuzzle ?? configForm.timePerPuzzle;
     configForm.revealSeconds = s.config.revealSeconds ?? configForm.revealSeconds;
     configForm.autoRevealAfterSolvers = s.config.autoRevealAfterSolvers ?? configForm.autoRevealAfterSolvers;
+    configForm.autoLoop = s.config.autoLoop ?? configForm.autoLoop;
   }
 }
 
