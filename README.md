@@ -41,7 +41,7 @@ Trước khi bắt đầu, hãy đảm bảo máy tính/máy chủ của bạn �
 ### Bước 1: Clone dự án về máy
 Mở Terminal / PowerShell và gõ:
 ```bash
-git clone https://github.com/vinhnq/tiktok_game.git
+git clone https://github.com/zinh8803/tiktok_game.git
 cd tiktok_game
 ```
 
@@ -223,6 +223,6 @@ Nếu bạn thấy dự án này thú vị, giúp ích cho công việc livestre
 ## 📄 Bản quyền & Đóng góp (License & Contributing)
 
 - Dự án được phát triển bởi **VinhNQ**.
-- Mọi đóng góp, báo lỗi hoặc yêu cầu tính năng mới xin vui lòng mở [Issue](https://github.com/vinhnq/tiktok_game/issues) hoặc gửi Pull Request!
+- Mọi đóng góp, báo lỗi hoặc yêu cầu tính năng mới xin vui lòng mở [Issue](https://github.com/zinh8803/tiktok_game/issues) hoặc gửi Pull Request!
 
 Chúc các bạn có những buổi Livestream bùng nổ tương tác! 🚀🎉
