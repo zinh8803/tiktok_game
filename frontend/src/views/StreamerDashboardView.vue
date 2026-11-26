@@ -177,6 +177,121 @@
                 <span>Tự động chuyển qua Công bố đáp án → Bảng xếp hạng → Câu tiếp theo</span>
               </label>
             </div>
+
+            <!-- HỆ THỐNG CHỈNH TỈ LỆ RANDOM CÂU HỎI & CHỐNG LẶP CÂU -->
+            <div class="form-field full-span random-ratio-panel tabular-nums">
+              <div class="random-ratio-header">
+                <div>
+                  <strong>🎲 Tỉ Lệ Random Câu Hỏi &amp; Chống Lặp Câu</strong>
+                  <p class="random-pool-sub">
+                    🛡️ Kho câu hỏi chưa ra trong chu kỳ:
+                    <strong style="color: #34d399;">
+                      {{ roomState?.randomPoolStats?.unaskedCount ?? stats.publishedQuestions ?? 0 }}
+                    </strong>
+                    / {{ roomState?.randomPoolStats?.totalUnique ?? stats.publishedQuestions ?? 0 }} câu
+                    (Đã hỏi: <strong>{{ roomState?.randomPoolStats?.askedCount ?? 0 }}</strong> câu)
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  style="padding: 0.3rem 0.65rem; font-size: 0.75rem;"
+                  @click="handleResetQuestionHistory"
+                >
+                  <RotateCcw :size="14" />
+                  <span>Reset lịch sử chống lặp</span>
+                </button>
+              </div>
+
+              <div class="random-mode-presets">
+                <button
+                  type="button"
+                  class="btn"
+                  :class="configForm.randomMode === 'WEIGHTED' && configForm.easyRatio === 35 && configForm.mediumRatio === 40 && configForm.hardRatio === 25 ? 'btn-cyan' : 'btn-secondary'"
+                  style="padding: 0.3rem 0.6rem; font-size: 0.75rem;"
+                  @click="applyRandomRatioPreset('BALANCED')"
+                >
+                  ⚖️ Cân bằng (35% Dễ · 40% TB · 25% Khó)
+                </button>
+                <button
+                  type="button"
+                  class="btn"
+                  :class="configForm.randomMode === 'WEIGHTED' && configForm.easyRatio === 60 && configForm.mediumRatio === 30 && configForm.hardRatio === 10 ? 'btn-cyan' : 'btn-secondary'"
+                  style="padding: 0.3rem 0.6rem; font-size: 0.75rem;"
+                  @click="applyRandomRatioPreset('EASY_FOCUS')"
+                >
+                  🌸 Tương tác cao (60% Dễ · 30% TB · 10% Khó)
+                </button>
+                <button
+                  type="button"
+                  class="btn"
+                  :class="configForm.randomMode === 'WEIGHTED' && configForm.easyRatio === 20 && configForm.mediumRatio === 40 && configForm.hardRatio === 40 ? 'btn-cyan' : 'btn-secondary'"
+                  style="padding: 0.3rem 0.6rem; font-size: 0.75rem;"
+                  @click="applyRandomRatioPreset('HARD_FOCUS')"
+                >
+                  🔥 Thử thách (20% Dễ · 40% TB · 40% Khó)
+                </button>
+                <button
+                  type="button"
+                  class="btn"
+                  :class="configForm.randomMode === 'NATURAL' ? 'btn-cyan' : 'btn-secondary'"
+                  style="padding: 0.3rem 0.6rem; font-size: 0.75rem;"
+                  @click="applyRandomRatioPreset('NATURAL')"
+                >
+                  🎲 Ngẫu nhiên tự nhiên 100% (Trộn đều toàn kho)
+                </button>
+              </div>
+
+              <div v-if="configForm.difficulty === 'ALL' && configForm.randomMode === 'WEIGHTED'" class="ratio-sliders-grid">
+                <div class="ratio-slider-item">
+                  <label>
+                    <span>🟢 Tỉ lệ câu Dễ ({{ roomState?.randomPoolStats?.byDifficulty?.EASY ?? '—' }} câu)</span>
+                    <strong style="color: #34d399;">{{ normalizedRatios.easy }}%</strong>
+                  </label>
+                  <input
+                    v-model.number="configForm.easyRatio"
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="5"
+                    style="accent-color: #10b981;"
+                  />
+                </div>
+                <div class="ratio-slider-item">
+                  <label>
+                    <span>🟡 Tỉ lệ Trung bình ({{ roomState?.randomPoolStats?.byDifficulty?.MEDIUM ?? '—' }} câu)</span>
+                    <strong style="color: #facc15;">{{ normalizedRatios.medium }}%</strong>
+                  </label>
+                  <input
+                    v-model.number="configForm.mediumRatio"
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="5"
+                    style="accent-color: #eab308;"
+                  />
+                </div>
+                <div class="ratio-slider-item">
+                  <label>
+                    <span>🔴 Tỉ lệ câu Khó ({{ roomState?.randomPoolStats?.byDifficulty?.HARD ?? '—' }} câu)</span>
+                    <strong style="color: #f43f5e;">{{ normalizedRatios.hard }}%</strong>
+                  </label>
+                  <input
+                    v-model.number="configForm.hardRatio"
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="5"
+                    style="accent-color: #f43f5e;"
+                  />
+                </div>
+              </div>
+
+              <label class="checkbox-label" style="margin-top: 0.45rem;">
+                <input v-model="configForm.antiRepeat" type="checkbox" />
+                <span>Chống lặp câu hỏi qua các trận (Chỉ lấy câu mới chưa từng mở cho đến khi hết sạch kho câu hỏi)</span>
+              </label>
+            </div>
           </div>
 
           <div class="panel-footer" style="display: flex; gap: 0.65rem; flex-wrap: wrap;">
@@ -966,7 +1081,58 @@ const configForm = reactive({
   questionCount: 10,
   timePerQuestion: 25,
   autoAdvance: true,
+  easyRatio: 35,
+  mediumRatio: 40,
+  hardRatio: 25,
+  randomMode: 'WEIGHTED' as 'WEIGHTED' | 'NATURAL',
+  antiRepeat: true,
 });
+
+const normalizedRatios = computed(() => {
+  const e = Math.max(0, Number(configForm.easyRatio || 0));
+  const m = Math.max(0, Number(configForm.mediumRatio || 0));
+  const h = Math.max(0, Number(configForm.hardRatio || 0));
+  const total = e + m + h || 100;
+  const easy = Math.round((e * 100) / total);
+  const hard = Math.round((h * 100) / total);
+  const medium = Math.max(0, 100 - easy - hard);
+  return { easy, medium, hard };
+});
+
+function applyRandomRatioPreset(preset: 'BALANCED' | 'EASY_FOCUS' | 'HARD_FOCUS' | 'NATURAL') {
+  configForm.difficulty = 'ALL';
+  if (preset === 'BALANCED') {
+    configForm.randomMode = 'WEIGHTED';
+    configForm.easyRatio = 35;
+    configForm.mediumRatio = 40;
+    configForm.hardRatio = 25;
+  } else if (preset === 'EASY_FOCUS') {
+    configForm.randomMode = 'WEIGHTED';
+    configForm.easyRatio = 60;
+    configForm.mediumRatio = 30;
+    configForm.hardRatio = 10;
+  } else if (preset === 'HARD_FOCUS') {
+    configForm.randomMode = 'WEIGHTED';
+    configForm.easyRatio = 20;
+    configForm.mediumRatio = 40;
+    configForm.hardRatio = 40;
+  } else if (preset === 'NATURAL') {
+    configForm.randomMode = 'NATURAL';
+  }
+  saveConfig();
+}
+
+async function handleResetQuestionHistory() {
+  try {
+    const res = await api.resetQuestionHistory(roomCode.value);
+    if (roomState.value && res?.randomPoolStats) {
+      roomState.value.randomPoolStats = res.randomPoolStats;
+    }
+    showToast('🔄 Đã làm mới lịch sử chống lặp câu hỏi — Toàn bộ kho câu hỏi đã sẵn sàng cho chu kỳ mới!', 'success');
+  } catch (err: any) {
+    showToast(err.message || 'Lỗi khi reset lịch sử câu hỏi', 'error');
+  }
+}
 
 const simUser = reactive({
   nickname: 'Minh Anh 🌸',
@@ -1228,6 +1394,13 @@ async function loadDashboardData() {
             : 10;
         configForm.timePerQuestion = roomRes.roomState.config.timePerQuestion || 15;
         configForm.autoAdvance = Boolean(roomRes.roomState.config.autoAdvance);
+        configForm.easyRatio = Number(roomRes.roomState.config.easyRatio ?? 35);
+        configForm.mediumRatio = Number(roomRes.roomState.config.mediumRatio ?? 40);
+        configForm.hardRatio = Number(roomRes.roomState.config.hardRatio ?? 25);
+        configForm.randomMode = (roomRes.roomState.config.randomMode as any) || 'WEIGHTED';
+        configForm.antiRepeat = roomRes.roomState.config.antiRepeat !== undefined
+          ? Boolean(roomRes.roomState.config.antiRepeat)
+          : true;
       }
     }
     if (roomRes.streamerActiveQuestion) {
@@ -1547,6 +1720,60 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+}
+
+.random-ratio-panel {
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  border-radius: 0.75rem;
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.random-ratio-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.random-pool-sub {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-top: 0.15rem;
+}
+
+.random-mode-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.ratio-sliders-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.75rem;
+  padding-top: 0.35rem;
+}
+
+.ratio-slider-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.ratio-slider-item label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.76rem;
+}
+
+.ratio-slider-item input[type='range'] {
+  width: 100%;
+  cursor: pointer;
 }
 
 .toast-banner {

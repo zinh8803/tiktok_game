@@ -65,6 +65,7 @@ export class DatabaseService implements OnModuleInit {
     const schemaSql = fs.readFileSync(schemaPath, 'utf-8');
     this.db.exec(schemaSql);
     this.ensureGiftRewardColumns();
+    this.ensureRoomConfigRandomColumns();
     this.ensurePerformanceIndexes();
 
     this.seedIfEmpty();
@@ -107,6 +108,41 @@ export class DatabaseService implements OnModuleInit {
          WHERE effect_type = 'SHARED_HINT' AND reward_type = 'POINTS'`
       )
       .run();
+  }
+
+  private ensureRoomConfigRandomColumns() {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS room_asked_questions (
+        room_id VARCHAR(64) NOT NULL,
+        question_id VARCHAR(64) NOT NULL,
+        content_hash VARCHAR(255) NOT NULL,
+        asked_at INTEGER NOT NULL,
+        PRIMARY KEY (room_id, question_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_room_asked_questions_room
+        ON room_asked_questions(room_id, asked_at DESC);
+    `);
+
+    const columns = this.db
+      .prepare(`PRAGMA table_info(room_configs)`)
+      .all() as Array<{ name: string }>;
+    const columnNames = new Set(columns.map((c) => c.name));
+
+    if (!columnNames.has('easy_ratio')) {
+      this.db.exec(`ALTER TABLE room_configs ADD COLUMN easy_ratio INTEGER NOT NULL DEFAULT 35`);
+    }
+    if (!columnNames.has('medium_ratio')) {
+      this.db.exec(`ALTER TABLE room_configs ADD COLUMN medium_ratio INTEGER NOT NULL DEFAULT 40`);
+    }
+    if (!columnNames.has('hard_ratio')) {
+      this.db.exec(`ALTER TABLE room_configs ADD COLUMN hard_ratio INTEGER NOT NULL DEFAULT 25`);
+    }
+    if (!columnNames.has('random_mode')) {
+      this.db.exec(`ALTER TABLE room_configs ADD COLUMN random_mode VARCHAR(32) NOT NULL DEFAULT 'WEIGHTED'`);
+    }
+    if (!columnNames.has('anti_repeat')) {
+      this.db.exec(`ALTER TABLE room_configs ADD COLUMN anti_repeat INTEGER NOT NULL DEFAULT 1`);
+    }
   }
 
   public runInTransaction<T>(fn: () => T): T {
@@ -628,8 +664,105 @@ export class DatabaseService implements OnModuleInit {
   }
 
   /**
-   * Chọn câu hỏi PUBLISHED cho trận đấu theo cấu hình phòng (Mục 4.5)
-   * Hạn chế lặp câu hỏi trong trận gần nhất và tạo snapshot cố định
+   * Đánh dấu một câu hỏi đã thực sự được mở trên màn hình LIVE của phòng (Chống lặp câu hỏi)
+   */
+  public markQuestionAsAsked(roomId: string, questionId: string, content: string) {
+    if (!questionId) return;
+    const contentHash = String(content || '').trim().toLowerCase();
+    const now = Date.now();
+    try {
+      this.db
+        .prepare(
+          `INSERT INTO room_asked_questions (room_id, question_id, content_hash, asked_at)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(room_id, question_id) DO UPDATE SET
+             content_hash = excluded.content_hash,
+             asked_at = excluded.asked_at`
+        )
+        .run(roomId || 'room-default', questionId, contentHash, now);
+    } catch {
+      // ignore
+    }
+  }
+
+  /**
+   * Làm mới (Reset) lịch sử câu hỏi đã ra của phòng để bắt đầu chu kỳ random mới
+   */
+  public resetRoomQuestionHistory(roomIdOrCode = 'KB2026') {
+    const room = this.getRoomWithConfig(roomIdOrCode);
+    const roomId = room?.id || 'room-default';
+    this.db
+      .prepare(`DELETE FROM room_asked_questions WHERE room_id = ? OR room_id = 'room-default'`)
+      .run(roomId);
+    return this.getRoomRandomPoolStats(roomId);
+  }
+
+  /**
+   * Thống kê kho câu hỏi Random & trạng thái chống lặp của phòng
+   */
+  public getRoomRandomPoolStats(roomIdOrCode = 'KB2026') {
+    const room = this.getRoomWithConfig(roomIdOrCode);
+    const roomId = room?.id || 'room-default';
+
+    const allPublished = this.db
+      .prepare(`SELECT id, difficulty, content FROM questions WHERE status = 'PUBLISHED'`)
+      .all() as Array<{ id: string; difficulty: string; content: string }>;
+
+    // Lọc câu hỏi duy nhất theo nội dung chuẩn hóa
+    const uniqueByContent = new Map<string, { id: string; difficulty: string }>();
+    for (const q of allPublished) {
+      const hash = String(q.content || '').trim().toLowerCase();
+      if (hash && !uniqueByContent.has(hash)) {
+        uniqueByContent.set(hash, { id: q.id, difficulty: q.difficulty });
+      }
+    }
+
+    const askedRows = this.db
+      .prepare(
+        `SELECT question_id, content_hash FROM room_asked_questions
+         WHERE room_id = ? OR room_id = 'room-default'`
+      )
+      .all(roomId) as Array<{ question_id: string; content_hash: string }>;
+
+    const askedIds = new Set(askedRows.map((r) => r.question_id));
+    const askedHashes = new Set(askedRows.map((r) => r.content_hash));
+
+    let easyTotal = 0;
+    let mediumTotal = 0;
+    let hardTotal = 0;
+    let unaskedCount = 0;
+
+    for (const [hash, q] of uniqueByContent.entries()) {
+      if (q.difficulty === 'EASY') easyTotal++;
+      else if (q.difficulty === 'HARD') hardTotal++;
+      else mediumTotal++;
+
+      if (!askedIds.has(q.id) && !askedHashes.has(hash)) {
+        unaskedCount++;
+      }
+    }
+
+    const totalUnique = uniqueByContent.size;
+    const askedCount = Math.max(0, totalUnique - unaskedCount);
+
+    return {
+      totalUnique,
+      askedCount,
+      unaskedCount,
+      byDifficulty: {
+        EASY: easyTotal,
+        MEDIUM: mediumTotal,
+        HARD: hardTotal,
+      },
+    };
+  }
+
+  /**
+   * Chọn câu hỏi PUBLISHED cho trận đấu theo cấu hình phòng & tỉ lệ Random (Mục 4.5)
+   * - Chống lặp câu hỏi triệt để theo câu đã thực sự mở trên sân khấu (room_asked_questions)
+   *   và chống trùng nội dung câu hỏi (content deduplication).
+   * - Cho phép chỉnh tỉ lệ % Dễ (easyRatio) / Trung bình (mediumRatio) / Khó (hardRatio)
+   *   hoặc chế độ trộn ngẫu nhiên tự nhiên toàn kho (NATURAL).
    */
   public selectQuestionsForSession(config: {
     categoryId?: string | null;
@@ -637,6 +770,11 @@ export class DatabaseService implements OnModuleInit {
     questionCount: number;
     timePerQuestion: number;
     roomId: string;
+    easyRatio?: number;
+    mediumRatio?: number;
+    hardRatio?: number;
+    randomMode?: string;
+    antiRepeat?: boolean;
   }): SessionQuestionSnapshot[] {
     const conditions = [`q.status = 'PUBLISHED'`];
     const params: any[] = [];
@@ -650,7 +788,7 @@ export class DatabaseService implements OnModuleInit {
       params.push(config.difficulty);
     }
 
-    let rows = this.db
+    let rawRows = this.db
       .prepare(
         `SELECT q.*, c.name as category_name
          FROM questions q
@@ -661,9 +799,9 @@ export class DatabaseService implements OnModuleInit {
 
     const isRunAll = !config.questionCount || config.questionCount <= 0 || config.questionCount >= 9999;
 
-    // Fallback nếu bộ lọc quá hẹp không đủ số câu (khi chọn số câu cụ thể hoặc khi bộ lọc rỗng)
-    if (rows.length === 0 || (!isRunAll && rows.length < config.questionCount)) {
-      const existingIds = new Set(rows.map((r) => r.id));
+    // Fallback nếu bộ lọc quá hẹp không đủ số câu
+    if (rawRows.length === 0 || (!isRunAll && rawRows.length < config.questionCount)) {
+      const existingIds = new Set(rawRows.map((r) => r.id));
       const fallbackRows = this.db
         .prepare(
           `SELECT q.*, c.name as category_name
@@ -674,40 +812,77 @@ export class DatabaseService implements OnModuleInit {
         .all() as any[];
       for (const fb of fallbackRows) {
         if (!existingIds.has(fb.id)) {
-          rows.push(fb);
+          rawRows.push(fb);
         }
       }
     }
 
-    // Lấy lịch sử sử dụng câu hỏi của phòng để đảm bảo quay vòng toàn bộ 800+ câu hỏi:
-    // Không bao giờ lặp lại câu hỏi cho đến khi tất cả câu hỏi trong ngân hàng đều đã được chơi!
+    // 1. Khử trùng lặp nội dung câu hỏi (Content Deduplication):
+    // Nếu trong DB có 2 bản ghi trùng nội dung câu hỏi, chỉ giữ lại 1 bản ghi duy nhất
+    const seenContentHashes = new Set<string>();
+    const rows: any[] = [];
+    for (const r of rawRows) {
+      const hash = String(r.content || '').trim().toLowerCase();
+      if (!hash || seenContentHashes.has(hash)) continue;
+      seenContentHashes.add(hash);
+      rows.push({ ...r, _contentHash: hash });
+    }
+
+    // 2. Đọc lịch sử các câu hỏi ĐÃ THỰC SỰ ĐƯỢC HỎI trong phòng này (room_asked_questions)
+    // Kết hợp với các câu thực sự đã mở (index <= current_question_index) trong các phiên trước
+    const askedAtById = new Map<string, number>();
+    const askedAtByHash = new Map<string, number>();
+
+    const askedTableRows = this.db
+      .prepare(
+        `SELECT question_id, content_hash, asked_at
+         FROM room_asked_questions
+         WHERE room_id = ? OR room_id = 'room-default'
+         ORDER BY asked_at DESC`
+      )
+      .all(config.roomId) as Array<{ question_id: string; content_hash: string; asked_at: number }>;
+
+    for (const ar of askedTableRows) {
+      if (ar.question_id && !askedAtById.has(ar.question_id)) {
+        askedAtById.set(ar.question_id, Number(ar.asked_at || 1));
+      }
+      if (ar.content_hash && !askedAtByHash.has(ar.content_hash)) {
+        askedAtByHash.set(ar.content_hash, Number(ar.asked_at || 1));
+      }
+    }
+
+    // Chỉ lấy các câu thực sự đã mở (index <= current_question_index) trong lịch sử game_sessions
     const recentSessions = this.db
       .prepare(
-        `SELECT questions_snapshot FROM game_sessions
+        `SELECT current_question_index, questions_snapshot FROM game_sessions
          WHERE room_id = ? OR room_id = 'room-default'
-         ORDER BY started_at DESC LIMIT 300`
+         ORDER BY rowid DESC LIMIT 60`
       )
-      .all(config.roomId) as Array<{ questions_snapshot: string }>;
+      .all(config.roomId) as Array<{ current_question_index: number; questions_snapshot: string }>;
 
-    // Map questionId -> chỉ số phiên gần nhất (0: trận vừa chơi xong, càng lớn càng chơi lâu rồi)
-    const lastUsedSessionIndex = new Map<string, number>();
     recentSessions.forEach((s, sIdx) => {
       try {
         const parsed = JSON.parse(s.questions_snapshot || '[]');
-        for (const item of parsed) {
-          if (item?.questionId && !lastUsedSessionIndex.has(item.questionId)) {
-            lastUsedSessionIndex.set(item.questionId, sIdx);
+        const maxAskedIdx =
+          typeof s.current_question_index === 'number' && s.current_question_index >= 0
+            ? s.current_question_index
+            : 0;
+        const actuallyAskedItems = parsed.slice(0, maxAskedIdx + 1);
+        const syntheticTimestamp = Date.now() - (sIdx + 1) * 60000;
+        for (const item of actuallyAskedItems) {
+          if (item?.questionId && !askedAtById.has(item.questionId)) {
+            askedAtById.set(item.questionId, syntheticTimestamp);
+          }
+          const h = String(item?.content || '').trim().toLowerCase();
+          if (h && !askedAtByHash.has(h)) {
+            askedAtByHash.set(h, syntheticTimestamp);
           }
         }
       } catch {
-        // ignore invalid snapshot json
+        // ignore
       }
     });
 
-    // Thuật toán chọn câu hỏi thông minh & cân bằng độ khó:
-    // Khi phòng để chế độ độ khó là 'ALL' (mặc định), ta phân bổ đều tỷ lệ Dễ - Trung Bình - Khó:
-    // Khoảng 35% Dễ (EASY), 40% Trung bình (MEDIUM), 25% Khó (HARD).
-    // Trong từng mức độ khó, vẫn áp dụng triệt để LRU + Unplayed-first (chưa chơi ưu tiên trước, đã chơi thì lấy câu xa nhất).
     const shuffle = <T>(arr: T[]) => {
       for (let i = arr.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -716,66 +891,106 @@ export class DatabaseService implements OnModuleInit {
       return arr;
     };
 
-    const buildPriorityPoolForRows = (candidateRows: any[]) => {
-      const neverUsedList: any[] = [];
-      const groupedByAge = new Map<number, any[]>();
+    const antiRepeatEnabled = config.antiRepeat !== false;
+    const isAsked = (r: any) =>
+      antiRepeatEnabled && (askedAtById.has(r.id) || askedAtByHash.has(r._contentHash));
+    const getAskedTime = (r: any) =>
+      Math.max(askedAtById.get(r.id) || 0, askedAtByHash.get(r._contentHash) || 0);
+
+    // Nếu toàn bộ kho câu hỏi lọc được đều đã từng được hỏi hết sạch -> Tự động reset chu kỳ chống lặp!
+    const totalUnaskedInFilter = rows.filter((r) => !isAsked(r)).length;
+    if (antiRepeatEnabled && totalUnaskedInFilter === 0 && rows.length > 0) {
+      this.db
+        .prepare(`DELETE FROM room_asked_questions WHERE room_id = ? OR room_id = 'room-default'`)
+        .run(config.roomId);
+      askedAtById.clear();
+      askedAtByHash.clear();
+    }
+
+    const splitUnaskedAndUsed = (candidateRows: any[]) => {
+      const unasked: any[] = [];
+      const used: any[] = [];
       for (const r of candidateRows) {
-        const sIdx = lastUsedSessionIndex.get(r.id);
-        if (sIdx === undefined) {
-          neverUsedList.push(r);
+        if (!isAsked(r)) {
+          unasked.push(r);
         } else {
-          const list = groupedByAge.get(sIdx) || [];
-          list.push(r);
-          groupedByAge.set(sIdx, list);
+          used.push(r);
         }
       }
-      const sortedAgesList = Array.from(groupedByAge.keys()).sort((a, b) => b - a);
-      const usedPool: any[] = [];
-      for (const age of sortedAgesList) {
-        const items = groupedByAge.get(age) || [];
-        usedPool.push(...shuffle(items));
-      }
-      return [...shuffle(neverUsedList), ...usedPool];
+      shuffle(unasked);
+      // Câu đã hỏi lâu nhất xếp trước (LRU)
+      used.sort((a, b) => getAskedTime(a) - getAskedTime(b));
+      return { unasked, used };
     };
 
     let selected: any[] = [];
     const countTarget = Math.max(1, config.questionCount || 15);
+    const randomMode = config.randomMode || 'WEIGHTED';
 
     if (isRunAll) {
-      selected = shuffle([...rows]);
+      const { unasked, used } = splitUnaskedAndUsed(rows);
+      selected = [...unasked, ...used];
     } else if (!config.difficulty || config.difficulty === 'ALL') {
-      // Cân bằng độ khó: Dễ ~35%, Trung bình ~40%, Khó ~25%
-      const easyRows = rows.filter((r) => r.difficulty === 'EASY');
-      const medRows = rows.filter((r) => r.difficulty === 'MEDIUM');
-      const hardRows = rows.filter((r) => r.difficulty === 'HARD');
+      if (randomMode === 'NATURAL') {
+        // Chế độ Ngẫu nhiên Tự nhiên 100%: Trộn đều toàn bộ câu chưa ra trong kho không ép tỉ lệ
+        const { unasked, used } = splitUnaskedAndUsed(rows);
+        selected = [...unasked, ...used].slice(0, countTarget);
+      } else {
+        // Chế độ Tỉ lệ tùy chỉnh (Weighted Ratios: Dễ / Trung bình / Khó)
+        const rawEasy = Math.max(0, Number(config.easyRatio ?? 35));
+        const rawMed = Math.max(0, Number(config.mediumRatio ?? 40));
+        const rawHard = Math.max(0, Number(config.hardRatio ?? 25));
+        const totalWeight = rawEasy + rawMed + rawHard || 100;
 
-      const easyPool = buildPriorityPoolForRows(easyRows);
-      const medPool = buildPriorityPoolForRows(medRows);
-      const hardPool = buildPriorityPoolForRows(hardRows);
+        let targetEasy = Math.round((countTarget * rawEasy) / totalWeight);
+        let targetHard = Math.round((countTarget * rawHard) / totalWeight);
+        let targetMed = Math.max(0, countTarget - targetEasy - targetHard);
 
-      let targetEasy = Math.max(1, Math.round(countTarget * 0.35));
-      let targetHard = Math.max(1, Math.round(countTarget * 0.25));
-      let targetMed = countTarget - targetEasy - targetHard;
-      if (targetMed < 1) targetMed = 1;
+        const easySplit = splitUnaskedAndUsed(rows.filter((r) => r.difficulty === 'EASY'));
+        const medSplit = splitUnaskedAndUsed(rows.filter((r) => r.difficulty === 'MEDIUM'));
+        const hardSplit = splitUnaskedAndUsed(rows.filter((r) => r.difficulty === 'HARD'));
 
-      const pickedEasy = easyPool.slice(0, targetEasy);
-      const pickedMed = medPool.slice(0, targetMed);
-      const pickedHard = hardPool.slice(0, targetHard);
+        // BƯỚC 1: Ưu tiên tuyệt đối lấy CÂU MỚI CHƯA TỪNG RA (unasked) theo đúng tỉ lệ Dễ / TB / Khó
+        const pickedEasy = easySplit.unasked.slice(0, targetEasy);
+        const pickedMed = medSplit.unasked.slice(0, targetMed);
+        const pickedHard = hardSplit.unasked.slice(0, targetHard);
 
-      const pickedSet = new Set([...pickedEasy, ...pickedMed, ...pickedHard].map((r) => r.id));
-      const pickedAll = [...pickedEasy, ...pickedMed, ...pickedHard];
+        const pickedAll = [...pickedEasy, ...pickedMed, ...pickedHard];
+        const pickedIds = new Set(pickedAll.map((r) => r.id));
 
-      // Nếu một trong các nhóm không đủ (ví dụ bộ lọc category hẹp), bù từ các nhóm còn lại
-      if (pickedAll.length < countTarget) {
-        const remainingCandidates = buildPriorityPoolForRows(rows).filter((r) => !pickedSet.has(r.id));
-        pickedAll.push(...remainingCandidates.slice(0, countTarget - pickedAll.length));
+        // BƯỚC 2: Nếu một mức độ khó (ví dụ HARD) đã hết câu mới chưa ra,
+        // BÙ BẰNG CÂU MỚI CHƯA RA (unasked) của các mức độ khó khác TRƯỚC KHI phải dùng lại câu cũ!
+        if (pickedAll.length < countTarget) {
+          const remainingUnasked = shuffle([
+            ...easySplit.unasked.filter((r) => !pickedIds.has(r.id)),
+            ...medSplit.unasked.filter((r) => !pickedIds.has(r.id)),
+            ...hardSplit.unasked.filter((r) => !pickedIds.has(r.id)),
+          ]);
+          for (const item of remainingUnasked) {
+            if (pickedAll.length >= countTarget) break;
+            pickedIds.add(item.id);
+            pickedAll.push(item);
+          }
+        }
+
+        // BƯỚC 3: Chỉ khi toàn bộ câu mới trong kho đều đã lấy hết mới bù từ danh sách LRU (câu hỏi lâu nhất)
+        if (pickedAll.length < countTarget) {
+          const allUsedLru = [...easySplit.used, ...medSplit.used, ...hardSplit.used]
+            .filter((r) => !pickedIds.has(r.id))
+            .sort((a, b) => getAskedTime(a) - getAskedTime(b));
+          for (const item of allUsedLru) {
+            if (pickedAll.length >= countTarget) break;
+            pickedIds.add(item.id);
+            pickedAll.push(item);
+          }
+        }
+
+        // Xáo trộn thứ tự các câu hỏi trong trận để nhịp độ dễ/tb/khó đan xen tự nhiên
+        selected = shuffle(pickedAll.slice(0, countTarget));
       }
-
-      // Xáo trộn thứ tự các câu hỏi trong trận để nhịp độ dễ/tb/khó đan xen tự nhiên, không bị gom cụm
-      selected = shuffle(pickedAll.slice(0, countTarget));
     } else {
-      const singlePool = buildPriorityPoolForRows(rows);
-      selected = singlePool.slice(0, countTarget);
+      const { unasked, used } = splitUnaskedAndUsed(rows);
+      selected = [...unasked, ...used].slice(0, countTarget);
     }
     const labels: OptionLabel[] = ['A', 'B', 'C', 'D'];
 
@@ -1302,6 +1517,11 @@ export class DatabaseService implements OnModuleInit {
         timePerQuestion: config?.time_per_question ?? 15,
         autoAdvance: Boolean(config?.auto_advance ?? 1),
         revealDuration: config?.reveal_duration ?? 6,
+        easyRatio: Number(config?.easy_ratio ?? 35),
+        mediumRatio: Number(config?.medium_ratio ?? 40),
+        hardRatio: Number(config?.hard_ratio ?? 25),
+        randomMode: String(config?.random_mode || 'WEIGHTED'),
+        antiRepeat: Boolean(config?.anti_repeat ?? 1),
       },
     };
 
@@ -1321,6 +1541,11 @@ export class DatabaseService implements OnModuleInit {
       timePerQuestion: number;
       autoAdvance: boolean;
       revealDuration: number;
+      easyRatio: number;
+      mediumRatio: number;
+      hardRatio: number;
+      randomMode: string;
+      antiRepeat: boolean;
     }>
   ) {
     const room = this.getRoomWithConfig(roomIdOrCode);
@@ -1342,7 +1567,9 @@ export class DatabaseService implements OnModuleInit {
       this.db
         .prepare(
           `UPDATE room_configs
-           SET category_id = ?, difficulty = ?, question_count = ?, time_per_question = ?, auto_advance = ?, reveal_duration = ?
+           SET category_id = ?, difficulty = ?, question_count = ?, time_per_question = ?,
+               auto_advance = ?, reveal_duration = ?, easy_ratio = ?, medium_ratio = ?,
+               hard_ratio = ?, random_mode = ?, anti_repeat = ?
            WHERE room_id = ?`
         )
         .run(
@@ -1352,6 +1579,11 @@ export class DatabaseService implements OnModuleInit {
           dto.timePerQuestion ?? room.config.timePerQuestion,
           dto.autoAdvance !== undefined ? (dto.autoAdvance ? 1 : 0) : (room.config.autoAdvance ? 1 : 0),
           dto.revealDuration ?? room.config.revealDuration,
+          dto.easyRatio !== undefined ? Math.max(0, Math.min(100, Number(dto.easyRatio))) : room.config.easyRatio,
+          dto.mediumRatio !== undefined ? Math.max(0, Math.min(100, Number(dto.mediumRatio))) : room.config.mediumRatio,
+          dto.hardRatio !== undefined ? Math.max(0, Math.min(100, Number(dto.hardRatio))) : room.config.hardRatio,
+          dto.randomMode ?? room.config.randomMode,
+          dto.antiRepeat !== undefined ? (dto.antiRepeat ? 1 : 0) : (room.config.antiRepeat ? 1 : 0),
           room.id
         );
     });

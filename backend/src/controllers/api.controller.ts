@@ -165,6 +165,16 @@ export class ApiController {
     return this.gameEngine.resetToWaitingRoom(roomCode);
   }
 
+  @Post('rooms/:roomCode/reset-question-history')
+  resetQuestionHistory(@Param('roomCode') roomCode: string) {
+    const stats = this.db.resetRoomQuestionHistory(roomCode);
+    this.gameEngine.emitRoomState(roomCode);
+    return {
+      ok: true,
+      randomPoolStats: stats,
+    };
+  }
+
   // =====================================================================
   // TIKTOK LIVE CONNECTOR & SIMULATOR ENDPOINTS (Mục 5, 6, 10)
   // =====================================================================

@@ -43,6 +43,8 @@ export const api = {
     request<any>(`/rooms/${roomCode}/finish`, { method: 'POST' }),
   resetGame: (roomCode = 'KB2026') =>
     request<any>(`/rooms/${roomCode}/reset`, { method: 'POST' }),
+  resetQuestionHistory: (roomCode = 'KB2026') =>
+    request<any>(`/rooms/${roomCode}/reset-question-history`, { method: 'POST' }),
 
   // TikTok LIVE Connector
   getTikTokStatus: (roomCode = 'KB2026') =>

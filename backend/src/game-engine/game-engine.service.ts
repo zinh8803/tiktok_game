@@ -305,6 +305,7 @@ export class GameEngineService {
         maxPlayers: runtime.autoCrowdMax,
       },
       config: roomRecord?.config,
+      randomPoolStats: this.db.getRoomRandomPoolStats(runtime.roomCode),
       recentEvents: runtime.recentEvents.slice(0, 15),
     };
   }
@@ -392,6 +393,11 @@ export class GameEngineService {
       difficulty: roomRecord.config.difficulty,
       questionCount: roomRecord.config.questionCount,
       timePerQuestion: roomRecord.config.timePerQuestion,
+      easyRatio: roomRecord.config.easyRatio,
+      mediumRatio: roomRecord.config.mediumRatio,
+      hardRatio: roomRecord.config.hardRatio,
+      randomMode: roomRecord.config.randomMode,
+      antiRepeat: roomRecord.config.antiRepeat,
     });
 
     if (snapshots.length === 0) {
@@ -500,6 +506,7 @@ export class GameEngineService {
     if (runtime.sessionId) {
       this.db.updateSessionProgress(runtime.sessionId, index, 'PLAYING');
     }
+    this.db.markQuestionAsAsked(runtime.roomId, q.questionId, q.content);
     this.db.updateRoomStatus(runtime.roomId, 'PLAYING');
 
     const questionStartedPayload = {

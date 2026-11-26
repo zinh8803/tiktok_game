@@ -704,7 +704,7 @@
 
             <div v-if="leaderboard.length" class="stage-leaderboard-rows tabular-nums">
               <div
-                v-for="entry in leaderboard.slice(0, 6)"
+                v-for="entry in leaderboard.slice(0, isVerticalLayout ? 8 : 6)"
                 :key="entry.playerId"
                 class="stage-lb-row"
                 :class="{
@@ -788,7 +788,7 @@
 
             <div v-if="leaderboard.length" class="mini-lb-list tabular-nums">
               <div
-                v-for="item in leaderboard.slice(0, isVerticalLayout ? 6 : 8)"
+                v-for="item in leaderboard.slice(0, 8)"
                 :key="item.playerId"
                 class="mini-lb-item"
                 :class="`mini-item-rank-${item.rank}`"
@@ -1092,8 +1092,8 @@ function recalcAutoFit() {
     }
   }
 
-  if (layoutCalib.value.preset === '362x444' && naturalHeight > targetH && targetH > 120) {
-    autoFitScale.value = Math.max(0.55, Math.min(1, targetH / naturalHeight));
+  if (isVerticalLayout.value && naturalHeight > targetH && targetH > 120) {
+    autoFitScale.value = Math.max(0.58, Math.min(1, targetH / naturalHeight));
   } else {
     autoFitScale.value = 1;
   }
@@ -2104,6 +2104,44 @@ onBeforeUnmount(() => {
 .layout-vertical .options-grid {
   grid-template-columns: 1fr;
   gap: 6px;
+}
+
+/* Khi hiển thị đáp án (ANSWER_REVEAL) ở mobile/dọc: xếp 4 đáp án A/B/C/D thành 2x2 gọn gàng để dành đủ chỗ hiển thị BXH 2 cột dọc bên dưới */
+.layout-vertical .reveal-screen .options-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.layout-vertical .reveal-screen .option-card {
+  padding: 5px 8px;
+  gap: 6px;
+}
+
+.layout-vertical .reveal-screen .option-key {
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+}
+
+.layout-vertical .reveal-screen .option-text {
+  font-size: clamp(11px, 1.55vh, 14px);
+  line-height: 1.2;
+}
+
+.layout-vertical .reveal-screen .question-prompt-box {
+  padding: 7px 10px;
+}
+
+.layout-vertical .reveal-screen .question-text {
+  font-size: clamp(12.5px, 1.85vh, 17px);
+  line-height: 1.28;
+}
+
+.layout-vertical .reveal-screen .explanation-content p {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .layout-vertical .option-card {
@@ -3190,6 +3228,42 @@ onBeforeUnmount(() => {
   gap: 0.45rem;
 }
 
+.layout-vertical .stage-leaderboard-rows {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.layout-vertical .stage-lb-row {
+  padding: 0.4rem 0.55rem;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.layout-vertical .stage-lb-row .lb-rank {
+  width: 22px;
+  height: 22px;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.layout-vertical .stage-lb-row .avatar-md {
+  width: 28px;
+  height: 28px;
+}
+
+.layout-vertical .stage-lb-row .lb-player-info strong {
+  font-size: 0.78rem;
+}
+
+.layout-vertical .stage-lb-row .lb-player-info span {
+  font-size: 0.66rem;
+}
+
+.layout-vertical .stage-lb-row .lb-total-score {
+  font-size: 0.82rem;
+}
+
 .stage-lb-row {
   display: flex;
   align-items: center;
@@ -3447,8 +3521,26 @@ onBeforeUnmount(() => {
 
 .layout-vertical .mini-lb-list {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0.4rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem 0.45rem;
+}
+
+.layout-vertical .mini-lb-item {
+  padding: 0.28rem 0.45rem;
+  gap: 0.35rem;
+}
+
+.layout-vertical .mini-lb-item .avatar-sm {
+  width: 22px;
+  height: 22px;
+}
+
+.layout-vertical .mini-user strong {
+  font-size: 0.74rem;
+}
+
+.layout-vertical .mini-score {
+  font-size: 0.75rem;
 }
 
 .mini-lb-item {
@@ -3572,9 +3664,16 @@ onBeforeUnmount(() => {
 
 @media (max-width: 480px) {
   .rules-strip,
-  .layout-vertical .rules-strip,
-  .layout-vertical .mini-lb-list {
+  .layout-vertical .rules-strip {
     grid-template-columns: 1fr;
+  }
+
+  .mini-lb-list,
+  .layout-vertical .mini-lb-list,
+  .layout-vertical .stage-leaderboard-rows {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.35rem 0.45rem;
   }
 }
 
