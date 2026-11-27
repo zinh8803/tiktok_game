@@ -1,5 +1,7 @@
 import { QuestionDifficulty, OptionLabel, QuestionStatus } from '../common/types';
 import { EXTRA_SEED_QUESTIONS } from './extra-questions';
+import { QUESTIONS_500_SEED } from './questions-500';
+import { QUESTIONS_PLUS_500 } from './questions-plus-500';
 
 export interface SeedCategory {
   id: string;
@@ -1385,6 +1387,8 @@ export const SEED_QUESTIONS: SeedQuestion[] = [
     attribution: 'Biên tập viên nội bộ',
   },
   ...EXTRA_SEED_QUESTIONS,
+  ...QUESTIONS_500_SEED,
+  ...QUESTIONS_PLUS_500,
 ];
 
 export const SEED_GIFTS = [

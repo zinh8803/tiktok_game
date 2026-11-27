@@ -472,7 +472,7 @@ export class CrosswordService {
     for (const set of DEFAULT_CROSSWORD_SETS) {
       this.questionSets.set(set.id, this.normalizeAndValidateSet(set));
     }
-    const bulkSets = generateBulkCrosswordQuestionSets(1000);
+    const bulkSets = generateBulkCrosswordQuestionSets(1500);
     for (const set of bulkSets) {
       this.questionSets.set(set.id, set);
     }

@@ -446,22 +446,6 @@
         </div>
 
         <div class="header-metrics tabular-nums">
-          <!-- Thanh tim tích lũy (Heart Goal Pill) -->
-          <div
-            class="heart-goal-pill"
-            :class="{ 'heart-milestone-ready': (heartProgress.current || heartProgress.total) >= 500 }"
-            :title="heartGoalLabel"
-          >
-            <span class="heart-pulse-emoji">💖</span>
-            <div class="heart-pill-info">
-              <span class="heart-pill-count">{{ (heartProgress.total || heartProgress.current || 0) }} Tim</span>
-              <span class="heart-pill-label">{{ heartGoalShortLabel }} (Mốc: {{ (heartProgress.current % 500 === 0 && heartProgress.current > 0) ? 500 : (heartProgress.current % 500) }}/500)</span>
-            </div>
-            <div class="heart-pill-track">
-              <div class="heart-pill-fill" :style="{ width: `${heartPercent}%` }"></div>
-            </div>
-          </div>
-
           <div v-if="!activeGiftBanner" class="metric-pill">
             <Users :size="14" />
             <span>{{ roomState?.playerCount || 0 }}</span>
@@ -471,6 +455,37 @@
           </div>
         </div>
       </header>
+
+      <!-- THANH TIM DỌC BÊN PHẢI (VERTICAL RIGHT-SIDE HEART METER) -->
+      <aside
+        class="heart-vertical-rail tabular-nums"
+        :class="{ 'heart-milestone-ready': (heartProgress.current || heartProgress.total) >= 500 }"
+        :title="heartGoalLabel"
+      >
+        <div class="heart-v-top">
+          <span class="heart-pulse-emoji">💖</span>
+          <span class="heart-v-goal">{{ heartGoalShortLabel }}</span>
+        </div>
+
+        <div class="heart-v-track">
+          <div class="heart-v-tick tick-75"></div>
+          <div class="heart-v-tick tick-50"></div>
+          <div class="heart-v-tick tick-25"></div>
+          <div class="heart-v-fill" :style="{ height: `${heartPercent}%` }">
+            <span class="heart-v-glow"></span>
+          </div>
+          <span class="heart-v-pct">{{ heartPercent }}%</span>
+        </div>
+
+        <div class="heart-v-bottom">
+          <strong class="heart-v-step">
+            {{ (heartProgress.current % 500 === 0 && heartProgress.current > 0) ? 500 : (heartProgress.current % 500) }}/500
+          </strong>
+          <small class="heart-v-total">
+            {{ heartProgress.total || heartProgress.current || 0 }} Tim
+          </small>
+        </div>
+      </aside>
 
       <!-- Like Milestone Pop Banner -->
       <transition name="pop-milestone">
@@ -713,23 +728,46 @@
                   'lb-top-3': entry.rank === 3,
                 }"
               >
-                <div class="lb-rank">{{ entry.rank }}</div>
-                <div class="player-avatar avatar-md" :class="`avatar-rank-${entry.rank}`">
-                  <img
-                    :src="resolveAvatarSrc(entry)"
-                    :alt="entry.nickname"
-                    referrerpolicy="no-referrer"
-                    @error="markAvatarFailed(entry)"
-                  />
-                </div>
-                <div class="lb-player-info">
-                  <strong>{{ entry.nickname }}</strong>
-                  <span>Đúng {{ entry.correctCount }} câu</span>
-                </div>
-                <div v-if="entry.lastQuestionDelta" class="lb-delta">
-                  +{{ entry.lastQuestionDelta }}
-                </div>
-                <div class="lb-total-score">{{ entry.totalScore }}đ</div>
+                <template v-if="isVerticalLayout">
+                  <div class="lb-card-top">
+                    <div class="lb-rank">{{ entry.rank }}</div>
+                    <div class="player-avatar avatar-md" :class="`avatar-rank-${entry.rank}`">
+                      <img
+                        :src="resolveAvatarSrc(entry)"
+                        :alt="entry.nickname"
+                        referrerpolicy="no-referrer"
+                        @error="markAvatarFailed(entry)"
+                      />
+                    </div>
+                    <strong class="lb-name" :title="entry.nickname">{{ entry.nickname }}</strong>
+                  </div>
+                  <div class="lb-card-bottom">
+                    <span class="lb-correct-pill">Đúng {{ entry.correctCount }} câu</span>
+                    <div class="lb-scores-right">
+                      <span v-if="entry.lastQuestionDelta" class="lb-delta">+{{ entry.lastQuestionDelta }}</span>
+                      <span class="lb-total-score">{{ entry.totalScore }}đ</span>
+                    </div>
+                  </div>
+                </template>
+                <template v-else>
+                  <div class="lb-rank">{{ entry.rank }}</div>
+                  <div class="player-avatar avatar-md" :class="`avatar-rank-${entry.rank}`">
+                    <img
+                      :src="resolveAvatarSrc(entry)"
+                      :alt="entry.nickname"
+                      referrerpolicy="no-referrer"
+                      @error="markAvatarFailed(entry)"
+                    />
+                  </div>
+                  <div class="lb-player-info">
+                    <strong :title="entry.nickname">{{ entry.nickname }}</strong>
+                    <span>Đúng {{ entry.correctCount }} câu</span>
+                  </div>
+                  <div v-if="entry.lastQuestionDelta" class="lb-delta">
+                    +{{ entry.lastQuestionDelta }}
+                  </div>
+                  <div class="lb-total-score">{{ entry.totalScore }}đ</div>
+                </template>
               </div>
             </div>
             <p v-else class="empty-players-hint">Chưa có người chơi ghi điểm ở lượt này.</p>
@@ -2611,69 +2649,179 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.heart-goal-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.25vh 0.7vh;
+/* Thanh Tim Dọc Bên Phải (Vertical Right-Side Heart Progress Bar) */
+.heart-vertical-rail {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 45;
+  width: 54px;
+  padding: 8px 5px;
   border-radius: 999px;
-  background: rgba(244, 63, 94, 0.16);
-  border: 1px solid rgba(244, 63, 94, 0.45);
-  font-size: clamp(10px, 1.5vh, 13px);
-  white-space: nowrap;
-  position: relative;
-  overflow: hidden;
+  background: rgba(13, 17, 39, 0.92);
+  border: 2px solid rgba(244, 63, 94, 0.65);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55), 0 0 14px rgba(244, 63, 94, 0.35);
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: auto;
   transition: all 0.25s ease;
 }
 
-.heart-goal-pill.heart-milestone-ready {
-  background: rgba(244, 63, 94, 0.35);
-  border-color: #f43f5e;
-  box-shadow: 0 0 10px rgba(244, 63, 94, 0.55);
+.heart-vertical-rail.heart-milestone-ready {
+  border-color: #fbbf24;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.6), 0 0 18px rgba(251, 191, 36, 0.65);
+}
+
+.heart-v-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
 }
 
 .heart-pulse-emoji {
   display: inline-block;
-  animation: heartPulse 1.2s infinite ease-in-out;
-  font-size: 1.1em;
+  animation: heartPulse 1.15s infinite ease-in-out;
+  font-size: 1.35rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 6px rgba(244, 63, 94, 0.75));
 }
 
 @keyframes heartPulse {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.25); }
+  50% { transform: scale(1.24); }
 }
 
-.heart-pill-info {
+.heart-v-goal {
+  font-size: 9px;
+  font-weight: 900;
+  color: #fecdd3;
+  line-height: 1.1;
+  text-align: center;
+  max-width: 48px;
+  word-break: break-word;
+}
+
+.heart-v-track {
+  position: relative;
+  width: 18px;
+  height: clamp(115px, 21vh, 185px);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1.5px solid rgba(251, 113, 133, 0.45);
+  border-radius: 999px;
+  overflow: hidden;
   display: flex;
-  align-items: center;
-  gap: 0.25rem;
+  align-items: flex-end;
+  justify-content: center;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55);
 }
 
-.heart-pill-count {
-  font-weight: 800;
+.heart-v-tick {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.22);
+  z-index: 2;
+}
+.heart-v-tick.tick-75 { bottom: 75%; }
+.heart-v-tick.tick-50 { bottom: 50%; }
+.heart-v-tick.tick-25 { bottom: 25%; }
+
+.heart-v-fill {
+  position: relative;
+  width: 100%;
+  background: linear-gradient(0deg, #e11d48 0%, #f43f5e 50%, #fb7185 85%, #fde047 100%);
+  border-radius: 999px;
+  transition: height 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  box-shadow: 0 0 12px rgba(244, 63, 94, 0.85);
+}
+
+.heart-v-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 999px;
+  filter: blur(1px);
+}
+
+.heart-v-pct {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  font-size: 8.5px;
+  font-weight: 900;
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  white-space: nowrap;
+}
+
+.heart-v-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  line-height: 1.15;
+}
+
+.heart-v-step {
+  font-size: 10px;
+  font-weight: 900;
+  color: #fde047;
+}
+
+.heart-v-total {
+  font-size: 8.5px;
+  font-weight: 700;
   color: #fda4af;
 }
 
-.heart-pill-label {
-  font-size: 0.85em;
-  color: #fecdd3;
-  opacity: 0.95;
+.layout-vertical .stage-grid {
+  padding-right: 56px;
 }
 
-.heart-pill-track {
-  width: 38px;
-  height: 5px;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 999px;
-  overflow: hidden;
-  margin-left: 0.15rem;
+.layout-vertical .heart-vertical-rail {
+  right: 6px;
+  width: 50px;
+  padding: 7px 4px;
 }
 
-.heart-pill-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #f43f5e, #fb7185);
-  border-radius: 999px;
-  transition: width 0.3s ease;
+.layout-vertical .heart-v-track {
+  width: 16px;
+  height: clamp(110px, 20vh, 175px);
+}
+
+.theme-cute .heart-vertical-rail {
+  background: rgba(255, 255, 255, 0.94);
+  border: 2.5px solid #ff4785;
+  box-shadow: 0 5px 0 #ff9ec4, 0 10px 22px rgba(255, 71, 133, 0.25);
+}
+
+.theme-cute .heart-v-goal {
+  color: #be185d;
+}
+
+.theme-cute .heart-v-track {
+  background: #ffe4ef;
+  border-color: #f472b6;
+}
+
+.theme-cute .heart-v-step {
+  color: #e11d48;
+}
+
+.theme-cute .heart-v-total {
+  color: #9d174d;
 }
 
 /* Like Milestone Popup */
@@ -3235,33 +3383,91 @@ onBeforeUnmount(() => {
 }
 
 .layout-vertical .stage-lb-row {
-  padding: 0.4rem 0.55rem;
-  gap: 0.45rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: space-between;
+  padding: 0.42rem 0.52rem;
+  gap: 0.3rem;
   min-width: 0;
 }
 
+.layout-vertical .stage-lb-row .lb-card-top {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  width: 100%;
+}
+
 .layout-vertical .stage-lb-row .lb-rank {
-  width: 22px;
-  height: 22px;
-  font-size: 0.75rem;
+  width: 20px;
+  height: 20px;
+  font-size: 0.72rem;
   flex-shrink: 0;
 }
 
 .layout-vertical .stage-lb-row .avatar-md {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
+  border-width: 2px;
+  flex-shrink: 0;
 }
 
-.layout-vertical .stage-lb-row .lb-player-info strong {
+.layout-vertical .stage-lb-row .lb-name {
+  flex: 1;
+  min-width: 0;
   font-size: 0.78rem;
+  font-weight: 800;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
 }
 
-.layout-vertical .stage-lb-row .lb-player-info span {
-  font-size: 0.66rem;
+.theme-cute .layout-vertical .stage-lb-row .lb-name,
+.theme-cute.layout-vertical .stage-lb-row .lb-name {
+  color: #4a154b;
+}
+
+.layout-vertical .stage-lb-row .lb-card-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.3rem;
+  width: 100%;
+  padding-top: 0.2rem;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.theme-cute .layout-vertical .stage-lb-row .lb-card-bottom,
+.theme-cute.layout-vertical .stage-lb-row .lb-card-bottom {
+  border-top-color: rgba(244, 114, 182, 0.3);
+}
+
+.layout-vertical .stage-lb-row .lb-correct-pill {
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.layout-vertical .stage-lb-row .lb-scores-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  flex-shrink: 0;
+}
+
+.layout-vertical .stage-lb-row .lb-delta {
+  font-size: 0.72rem;
+  white-space: nowrap;
 }
 
 .layout-vertical .stage-lb-row .lb-total-score {
-  font-size: 0.82rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
 }
 
 .stage-lb-row {
@@ -3526,21 +3732,27 @@ onBeforeUnmount(() => {
 }
 
 .layout-vertical .mini-lb-item {
-  padding: 0.28rem 0.45rem;
-  gap: 0.35rem;
+  padding: 0.26rem 0.38rem;
+  gap: 0.28rem;
+}
+
+.layout-vertical .mini-lb-item .mini-rank {
+  width: 19px;
+  height: 19px;
+  font-size: 0.68rem;
 }
 
 .layout-vertical .mini-lb-item .avatar-sm {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
 }
 
 .layout-vertical .mini-user strong {
-  font-size: 0.74rem;
+  font-size: 0.72rem;
 }
 
 .layout-vertical .mini-score {
-  font-size: 0.75rem;
+  font-size: 0.73rem;
 }
 
 .mini-lb-item {
